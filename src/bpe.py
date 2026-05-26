@@ -36,7 +36,7 @@ class BPETokenizer:
         self.vocab_size = vocab_size
         self.id_to_token = {}
         self.token_to_id = {}
-        self.merges = []
+        self.merges = [] # 토크나이저가 학습한 merge 규칙 목록 (2개짜리 튜플을 원소로 가짐)
 
     def _init_special_tokens(self):
         """
@@ -104,14 +104,45 @@ class BPETokenizer:
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
-        TODO: 문자열을 token ID 리스트로 변환합니다.
+        문자열을 token ID 리스트로 변환합니다.
 
         구현 힌트:
         - 먼저 UTF-8 byte ID 리스트를 만듭니다.
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
-        raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
+
+        # 문자열을 UTF-8 bytes로 변환한 뒤 byte token ID 리스트를 만든다.
+        text_bytes = text.encode("utf-8") # bytes 객체(iterable 객체)
+        ids = [BYTE_OFFSET + b for b in text_bytes] # 현재 입력 문장을 token id로 바꾼 작업용 리스트
+
+        # merge rule을 학습 순서대로 적용
+        for pair in self.merges:
+            new_id = self.token_to_id[pair]
+            ids = self._apply_merge(ids, pair, new_id)
+
+        # add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙인다.
+        if add_bos_eos:
+            ids.insert(0, self.get_bos_id())
+            ids.append(self.get_eos_id())
+        
+        return ids
+
+    # [헬퍼 함수] encode 및 train을 위한 머지용 함수: ids 안에서 특정 pair를 새 token id로 치환한다
+    def _apply_merge(self, ids: list[int], pair: tuple[int, int], new_id: int) -> list[int]:
+        merged = []
+        i = 0
+
+        while i < len(ids):
+            # 현재 원소 및 바로 다음 원소가 존재하고, 페어가 될 경우 머지
+            if (i < len(ids) - 1 and (ids[i], ids[i + 1]) == pair):
+                merged.append(new_id)
+                i += 2
+            else:
+                merged.append(ids[i])
+                i += 1
+
+        return merged
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
