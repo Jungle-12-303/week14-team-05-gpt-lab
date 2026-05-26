@@ -239,4 +239,5 @@ class BPETokenizer:
         if isinstance(token, str) and token_id in SPECIAL_IDS.values():
             return list(token.encode("utf-8"))
 
-        return []
+        raise ValueError(f"Unsupported token type: {type(token)}")
+        
