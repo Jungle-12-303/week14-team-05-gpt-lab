@@ -76,9 +76,11 @@ class BPETokenizer:
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
 
+    # (참고) BPE 학습은 한 번 반복할 때마다 자주 등장하는 pair 하나를 새 token으로 추가합니다.
+    # 한국어를 byte 단위로만 두면 한 글자가 보통 3개 byte라 너무 길어지므로, 자주 나오는 byte 조합을 merge해서 vocab을 확장합니다.
     def train(self, corpus: str):
         """
-        TODO: 코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
+        코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
 
         구현 힌트:
         - `corpus.encode("utf-8")`로 byte ID 시퀀스를 만듭니다.
@@ -86,7 +88,47 @@ class BPETokenizer:
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+
+        # 학습 시작 시 vocab과 merge rule을 초기화
+        self._init_special_tokens()
+        self.merges = []
+
+        # corpus를 byte token id 리스트로 변환
+        ids = [BYTE_OFFSET + b for b in corpus.encode("utf-8")]
+
+        # tokenizer가 사용할 어휘 개수를 늘리기 위해 목표 vocab_size에 도달할 때까지 merge를 반복
+        while len(self.id_to_token) < self.vocab_size:
+            # 현재 ids에서 인접 pair 빈도 계산
+            pair_counts = self._get_pair_counts(ids)
+            if not pair_counts: # pair가 없으면 정지
+                break
+
+            # 가장 자주 나온 pair 선택
+            best_pair = max(pair_counts, key=pair_counts.get)
+
+            # 새 token id 발급
+            new_id = len(self.id_to_token)
+
+            # merges, id_to_token, token_to_id에 등록
+            self.merges.append(best_pair)
+            self.id_to_token[new_id] = best_pair
+            self.token_to_id[best_pair] = new_id
+
+            # ids에서 해당 pair를 새 token id로 치환
+            ids = self._apply_merge(ids, best_pair, new_id)
+
+    
+    # [헬퍼 함수] 현재 token id 리스트에서 인접한 두 토큰 pair가 각각 몇 번 등장했는지 세는 함수 
+    # (다음에 어떤 pair를 merge할지 결정하기 위해 빈도를 카운팅)
+    def _get_pair_counts(self, ids: list[int]) -> dict[tuple[int, int], int]:
+        counts = {} # pair 빈도표 dict
+        
+        for i in range(len(ids) - 1):
+            # 현재 토큰과 바로 다음 토큰을 2개짜리 tuple로 묶는다.
+            pair = (ids[i], ids[i + 1])
+            counts[pair] = counts.get(pair, 0) + 1
+
+        return counts
 
     def save(self, path: str | Path):
         """
@@ -240,4 +282,3 @@ class BPETokenizer:
             return list(token.encode("utf-8"))
 
         raise ValueError(f"Unsupported token type: {type(token)}")
-        
