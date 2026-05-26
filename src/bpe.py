@@ -106,7 +106,8 @@ class BPETokenizer:
             token_id_list = self._replace_pair(token_id_list, pair, new_id)
 
         if add_bos_eos:
-            token_id_list = [self.get_bos_id()] + token_id_list + [self.get_eos_id()]
+            token_id_list = [self.get_bos_id()
+                            ] + token_id_list + [self.get_eos_id()]
 
         return token_id_list
 
@@ -125,11 +126,19 @@ class BPETokenizer:
         return temp_list
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
-        """
-        TODO: token ID 리스트를 문자열로 복원합니다.
+        result_bytes = bytearray()
 
-        주의:
-        - merge token은 원본 byte token까지 재귀적으로 펼칩니다.
-        - byte를 하나씩 decode하지 말고, 마지막에 `bytes(...).decode("utf-8")`를 한 번만 호출합니다.
-        """
-        raise NotImplementedError("BPETokenizer.decode를 구현하세요.")
+        special_ids = set(SPECIAL_IDS.values())
+
+        for token_id in ids:
+            if skip_special and token_id in special_ids:
+                continue
+
+            token = self.id_to_token[token_id]
+
+            if isinstance(token, bytes):
+                result_bytes.extend(token)
+            else:
+                result_bytes.extend(token.encode("utf-8"))
+
+        return bytes(result_bytes).decode("utf-8")
