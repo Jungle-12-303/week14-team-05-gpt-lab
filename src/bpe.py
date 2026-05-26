@@ -7,6 +7,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 항상 `text.encode("utf-8")`로 byte ID 시퀀스를 만든 뒤 merge를 적용하세요.
 """
 
+import json
 from pathlib import Path
 
 
@@ -78,19 +79,68 @@ class BPETokenizer:
         """
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
+    # vocabulary와 merge rule을 JSON 파일로 저장합니다.
     def save(self, path: str | Path):
-        """
-        TODO: vocabulary와 merge rule을 JSON 파일로 저장합니다.
+        # bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
 
-        bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
-        """
-        raise NotImplementedError("BPETokenizer.save를 구현하세요.")
+        # JSON 형식에 맞게 변환
+        id_to_token_save = {}
+        for idx, item in self.id_to_token.items():
 
+            if isinstance(item, str):
+                id_to_token_save[idx] = {"type": "str", "value": item}
+                continue
+                
+            if isinstance(item, bytes):
+                id_to_token_save[idx] = {"type": "bytes", "value": list(item)}
+                continue
+
+            if isinstance(item, tuple):
+                id_to_token_save[idx] = {"type": "tuple", "value": list(item)}
+                continue
+
+        merges_save = []
+        for item in self.merges:
+            merges_save.append(list(item))
+
+        # 저장할 데이터 생성
+        data = {
+            'vocab_size': self.vocab_size,
+            'id_to_token': id_to_token_save,
+            'merges': merges_save
+        }
+        
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    # save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
     def load(self, path: str | Path):
-        """
-        TODO: save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
-        """
-        raise NotImplementedError("BPETokenizer.load를 구현하세요.")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        id_to_token_load = {}
+        for idx, item in data['id_to_token'].items():
+            idx = int(idx)
+            if item['type'] == 'str':
+                id_to_token_load[idx] = item['value']
+                continue
+                
+            if item['type'] == 'bytes':
+                id_to_token_load[idx] = bytes(item['value'])
+                continue
+
+            if item['type'] == 'tuple':
+                id_to_token_load[idx] = tuple(item['value'])
+                continue
+
+        token_to_id_load = {}
+        for idx, item in id_to_token_load.items():
+            token_to_id_load[item] = idx
+
+        self.vocab_size = data['vocab_size']
+        self.merges = [tuple(pair) for pair in data['merges']]
+        self.id_to_token = id_to_token_load
+        self.token_to_id = token_to_id_load
 
     # 문자열을 token ID 리스트로 변환합니다.
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
