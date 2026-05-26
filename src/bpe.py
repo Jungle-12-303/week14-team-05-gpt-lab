@@ -110,10 +110,29 @@ class BPETokenizer:
             json.dump(data, f)
 
     def load(self, path: str | Path):
-        """
-        TODO: save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
-        """
-        raise NotImplementedError("BPETokenizer.load를 구현하세요.")
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        self.vocab_size = data["vocab_size"]
+        self.id_to_token = {}
+        self.token_to_id = {}
+        self.merges = []
+
+        for d in data["id_to_token"]:
+            token_id = d["id"]
+
+            if d["type"] == "bytes":
+                token = bytes(d["value"])
+            elif d["type"] == "tuple":
+                token = tuple(d["value"])
+            else:
+                token = d["value"]
+
+            self.id_to_token[token_id] = token
+            self.token_to_id[token] = token_id
+
+        for d in data["merges"]:
+            self.merges.append((tuple(d["pair"]), d["new_id"]))
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         # UTF-8 byte ID 리스트
