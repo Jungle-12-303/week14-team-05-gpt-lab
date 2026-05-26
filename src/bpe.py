@@ -9,7 +9,6 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 
 from pathlib import Path
 
-
 PAD_TOKEN = "<pad>"
 UNK_TOKEN = "<unk>"
 BOS_TOKEN = "<bos>"
@@ -38,12 +37,16 @@ class BPETokenizer:
         self.merges = []
 
     def _init_special_tokens(self):
-        """
-        TODO:
-        1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다.
-        2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
-        """
-        raise NotImplementedError("_init_special_tokens를 구현하세요.")
+
+        # 1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다
+        for token, token_id in SPECIAL_IDS.items():
+            self.id_to_token[token_id] = token
+            self.token_to_id[token] = token_id
+
+        # 2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
+        for index in range(NUM_BYTES):
+            self.id_to_token[index + BYTE_OFFSET] = bytes([index])
+            self.token_to_id[bytes([index])] = index + BYTE_OFFSET
 
     def get_pad_id(self):
         """padding 토큰 ID."""
