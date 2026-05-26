@@ -9,6 +9,8 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 
 from pathlib import Path
 
+# Counter({(101, 102): 2, (102, 101): 1}) 조합
+from collections import Counter
 
 PAD_TOKEN = "<pad>"
 UNK_TOKEN = "<unk>"
@@ -87,7 +89,44 @@ class BPETokenizer:
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+        
+                self._init_special_tokens()
+        self.merges = []
+
+        ids = []
+        for byte_value in corpus.encode("utf-8"):
+            ids.append(BYTE_OFFSET + byte_value)
+
+        next_id = BYTE_OFFSET + NUM_BYTES
+
+        while len(self.id_to_token) < self.vocab_size and len(ids) >= 2:
+            pair_counts = Counter(zip(ids, ids[1:]))
+            if not pair_counts:
+                break
+
+            best_pair, count = pair_counts.most_common(1)[0]
+            if count < 2:
+                break
+
+            self.merges.append(best_pair)
+            self.id_to_token[next_id] = best_pair
+            self.token_to_id[best_pair] = next_id
+
+            new_ids = []
+            i = 0
+            while i < len(ids):
+                if i + 1 < len(ids) and (ids[i], ids[i + 1]) == best_pair:
+                    new_ids.append(next_id)
+                    i += 2
+                else:
+                    new_ids.append(ids[i])
+                    i += 1
+
+            ids = new_ids
+            next_id += 1
+        
+        
+        
 
     def save(self, path: str | Path):
         """
