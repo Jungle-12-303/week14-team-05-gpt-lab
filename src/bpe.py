@@ -16,8 +16,7 @@ BOS_TOKEN = "<bos>"
 EOS_TOKEN = "<eos>"
 
 SPECIAL_TOKENS = [PAD_TOKEN, UNK_TOKEN, BOS_TOKEN, EOS_TOKEN]
-SPECIAL_IDS = {token: idx for idx, token in enumerate(SPECIAL_TOKENS)} 
-# SPECIAL_IDS 는 { "<pad>": 0, "<unk>": 1, "<bos>": 2, "<eos>": 3, }를 의미함 - 특수 토큰 ID를 항상 고정하기 위해 사용하는 값
+SPECIAL_IDS = {token: idx for idx, token in enumerate(SPECIAL_TOKENS)}
 BYTE_OFFSET = len(SPECIAL_TOKENS)
 NUM_BYTES = 256
 
@@ -36,7 +35,8 @@ class BPETokenizer:
         self.vocab_size = vocab_size
         self.id_to_token = {}
         self.token_to_id = {}
-        self.merges = [] # 토크나이저가 학습한 merge 규칙 목록 (2개짜리 튜플을 원소로 가짐)
+        # 토크나이저가 학습한 merge 규칙 목록 (2개짜리 튜플을 원소로 가짐)
+        self.merges = []
 
     def _init_special_tokens(self):
         """
@@ -44,19 +44,18 @@ class BPETokenizer:
         2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
         """
 
-        # 0. id_to_token, token_to_id를 비운다.
         self.id_to_token = {}
         self.token_to_id = {}
 
-        # 1. <pad>, <unk>, <bos>, <eos>를 ID 0~3으로 등록한다.
+        # 1. <pad>, <unk>, <bos>, <eos>를 ID 0~3으로 등록
         for token, idx in SPECIAL_IDS.items():
             self.id_to_token[idx] = token
             self.token_to_id[token] = idx
 
-        # 2. byte 0~255를 ID 4~259로 등록한다.
+        # 2. byte 0~255를 ID 4~259로 등록
         for byte_value in range(NUM_BYTES):
             token_id = BYTE_OFFSET + byte_value
-            token = bytes([byte_value]) # bytes()는 Python에서 변경 불가능한 byte 시퀀스를 만드는 함수
+            token = bytes([byte_value])
             self.id_to_token[token_id] = token
             self.token_to_id[token] = token_id
 
@@ -76,8 +75,7 @@ class BPETokenizer:
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
 
-    # (참고) BPE 학습은 한 번 반복할 때마다 자주 등장하는 pair 하나를 새 token으로 추가합니다.
-    # 한국어를 byte 단위로만 두면 한 글자가 보통 3개 byte라 너무 길어지므로, 자주 나오는 byte 조합을 merge해서 vocab을 확장합니다.
+    # BPE는 자주 등장하는 인접 token pair를 반복적으로 merge해 vocab을 확장
     def train(self, corpus: str):
         """
         코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
@@ -96,7 +94,7 @@ class BPETokenizer:
         # corpus를 byte token id 리스트로 변환
         ids = [BYTE_OFFSET + b for b in corpus.encode("utf-8")]
 
-        # tokenizer가 사용할 어휘 개수를 늘리기 위해 목표 vocab_size에 도달할 때까지 merge를 반복
+        # 목표 vocab 크기까지 pair merge를 반복
         while len(self.id_to_token) < self.vocab_size:
             # 현재 ids에서 인접 pair 빈도 계산
             pair_counts = self._get_pair_counts(ids)
@@ -117,9 +115,7 @@ class BPETokenizer:
             # ids에서 해당 pair를 새 token id로 치환
             ids = self._apply_merge(ids, best_pair, new_id)
 
-    
-    # [헬퍼 함수] 현재 token id 리스트에서 인접한 두 토큰 pair가 각각 몇 번 등장했는지 세는 함수 
-    # (다음에 어떤 pair를 merge할지 결정하기 위해 빈도를 카운팅)
+    # [헬퍼 함수] 인접 token pair별 등장 횟수를 세는 함수
     def _get_pair_counts(self, ids: list[int]) -> dict[tuple[int, int], int]:
         counts = {} # pair 빈도표 dict
         
@@ -171,14 +167,9 @@ class BPETokenizer:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        assert(type(data) == dict)
-        assert(type(data["merges"]) == list)
-
         self.vocab_size = data["vocab_size"]
-
-        # JSON에는 tuple이 없기 때문에 load시 다시 tuple로 변환해야 함
+        # JSON에는 tuple이 없기 때문에 load시 다시 tuple로 변환 필요
         self.merges = [tuple(pair) for pair in data["merges"]]
-
         self.id_to_token = {}
         self.token_to_id = {}
 
@@ -209,8 +200,8 @@ class BPETokenizer:
         """
 
         # 문자열을 UTF-8 bytes로 변환한 뒤 byte token ID 리스트를 만든다.
-        text_bytes = text.encode("utf-8") # bytes 객체(iterable 객체)
-        ids = [BYTE_OFFSET + b for b in text_bytes] # 현재 입력 문장을 token id로 바꾼 작업용 리스트
+        text_bytes = text.encode("utf-8")
+        ids = [BYTE_OFFSET + b for b in text_bytes]
 
         # merge rule을 학습 순서대로 적용
         for pair in self.merges:
@@ -224,7 +215,7 @@ class BPETokenizer:
         
         return ids
 
-    # [헬퍼 함수] encode 및 train을 위한 머지용 함수: ids 안에서 특정 pair를 새 token id로 치환한다
+    # [헬퍼 함수] ids 안의 특정 pair를 새 token id로 치환 (merge시 사용)
     def _apply_merge(self, ids: list[int], pair: tuple[int, int], new_id: int) -> list[int]:
         merged = []
         i = 0
@@ -261,7 +252,7 @@ class BPETokenizer:
 
         return bytes(byte_values).decode("utf-8")
 
-    # [헬퍼 함수] decode용 재귀함수: token ID를 최종 byte 값들로 변환 
+    # [헬퍼 함수] merge token을 재귀적으로 펼쳐 byte 값으로 복원 (decode용)
     def _token_id_to_bytes(self, token_id: int) -> list[int]:
         token = self.id_to_token[token_id]
 
