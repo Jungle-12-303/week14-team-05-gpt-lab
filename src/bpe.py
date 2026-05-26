@@ -92,14 +92,37 @@ class BPETokenizer:
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
-        TODO: 문자열을 token ID 리스트로 변환합니다.
+        문자열을 token ID 리스트로 변환합니다.
 
         구현 힌트:
         - 먼저 UTF-8 byte ID 리스트를 만듭니다.
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
-        raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
+        # UTF-8 byte ID 리스트
+        token_id_list = [byte + BYTE_OFFSET for byte in text.encode("utf-8")]
+
+        for pair, new_id in self.merges:
+            token_id_list = self._replace_pair(token_id_list, pair, new_id)
+
+        if add_bos_eos:
+            token_id_list = [self.get_bos_id()] + token_id_list + [self.get_eos_id()]
+
+        return token_id_list
+
+    def _replace_pair(self, token_id_list: list[int], pair: tuple[int, int],
+                      new_id: int) -> list[int]:
+        temp_list = []
+        i = 0
+        while i < len(token_id_list):
+            if i < len(token_id_list) - 1 and (token_id_list[i],
+                                               token_id_list[i + 1]) == pair:
+                temp_list.append(new_id)
+                i += 2
+            else:
+                temp_list.append(token_id_list[i])
+                i += 1
+        return temp_list
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
