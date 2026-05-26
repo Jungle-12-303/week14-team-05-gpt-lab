@@ -33,18 +33,34 @@ class BPETokenizer:
 
     def __init__(self, vocab_size: int = 3000):
         self.vocab_size = vocab_size
-        self.id_to_token = {}
-        self.token_to_id = {}
-        self.merges = []
+        self.id_to_token = {}  #숫자 -> 실제 토큰
+        self.token_to_id = {}  #실제 토큰 -> 숫자 
+        self.merges = []       #dpe pair 순서 목록 
 
     def _init_special_tokens(self):
         """
-        TODO:
+        TODO: 
         1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다.
         2. byte 0~255를 ID 4~259에 bytes([byte_value]) 형태로 등록합니다.
         """
-        raise NotImplementedError("_init_special_tokens를 구현하세요.")
-
+        self.id_to_token = {}
+        self.token_to_id = {} 
+        
+        #1. special_tokens등록: 상단 SPECIAL_TOKENS[]배열 사용 
+        #   special token 4개 등록
+        for token in SPECIAL_TOKENS:
+            token_id = SPECIAL_IDS[token]       # "<pad>" -> 0
+            self.id_to_token[token_id] = token
+            self.token_to_id[token] = token_id  # 0 -> "<pad>"
+            
+        #2. num_byte = 256(0 ~ 255) 
+        #   byte token 256개 등록
+        for byte_value in range(NUM_BYTES): 
+            token_id = BYTE_OFFSET + byte_value
+            token = bytes([byte_value]) 
+            self.id_to_token[token_id] = token 
+            self.token_to_id[token] = token_id 
+        
     def get_pad_id(self):
         """padding 토큰 ID."""
         return SPECIAL_IDS[PAD_TOKEN]
@@ -89,14 +105,35 @@ class BPETokenizer:
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
-        TODO: 문자열을 token ID 리스트로 변환합니다.
+        TODO: 문자열을 token ID 리스트로 변환합니다. 
 
         구현 힌트:
         - 먼저 UTF-8 byte ID 리스트를 만듭니다.
         - train/load에서 얻은 merge rule을 학습 순서대로 적용합니다.
         - add_bos_eos=True이면 앞뒤에 bos/eos ID를 붙입니다.
         """
-        raise NotImplementedError("BPETokenizer.encode를 구현하세요.")
+        #1. text -> list[int]로 반환하라 
+        if not self.id_to_token:         # 특수토큰 + byte토큰 x
+            self._init_special_tokens()
+        
+        emp_list = []
+                
+        #2. text -> utf-8 bytes로 바꾼다. 
+        byte_seq = text.encode("utf-8")  #"AB".encode("utf-8") = b"AB" -> [65,66]
+        
+        #3. 변환한 bytes를 꺼내서 리스트에 반환하라 
+        for byte_value in byte_seq:
+            token_id = BYTE_OFFSET + byte_value 
+            emp_list.append(token_id)
+            
+        #4. 앞뒤로 특수토큰 붙이기     
+        if add_bos_eos: 
+            emp_list = [self.get_bos_id()] + emp_list + [self.get_eos_id()]
+        
+        return emp_list
+            
+        
+        
 
     def decode(self, ids: list[int], skip_special: bool = True) -> str:
         """
