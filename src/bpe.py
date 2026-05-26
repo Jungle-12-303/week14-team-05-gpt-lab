@@ -7,6 +7,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 항상 `text.encode("utf-8")`로 byte ID 시퀀스를 만든 뒤 merge를 적용하세요.
 """
 
+import json
 from pathlib import Path
 
 PAD_TOKEN = "<pad>"
@@ -77,12 +78,36 @@ class BPETokenizer:
         raise NotImplementedError("BPETokenizer.train을 구현하세요.")
 
     def save(self, path: str | Path):
-        """
-        TODO: vocabulary와 merge rule을 JSON 파일로 저장합니다.
+        data = {}
+        data["vocab_size"] = self.vocab_size
+        data["id_to_token"] = []
+        data["merges"] = []
 
-        bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
-        """
-        raise NotImplementedError("BPETokenizer.save를 구현하세요.")
+        for token_id, token in self.id_to_token.items():
+            if isinstance(token, bytes):
+                data["id_to_token"].append({
+                    "id": token_id,
+                    "type": "bytes",
+                    "value": list(token),
+                })
+            elif isinstance(token, tuple):
+                data["id_to_token"].append({
+                    "id": token_id,
+                    "type": "tuple",
+                    "value": list(token),
+                })
+            else:
+                data["id_to_token"].append({
+                    "id": token_id,
+                    "type": "str",
+                    "value": token,
+                })
+
+        for pair, new_id in self.merges:
+            data["merges"].append({"pair": list(pair), "new_id": new_id})
+
+        with open(path, 'w') as f:
+            json.dump(data, f)
 
     def load(self, path: str | Path):
         """
