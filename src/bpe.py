@@ -7,6 +7,7 @@ UTF-8 byte-level BPE 토크나이저 과제 템플릿.
 항상 `text.encode("utf-8")`로 byte ID 시퀀스를 만든 뒤 merge를 적용하세요.
 """
 
+import json
 from pathlib import Path
 
 # Counter({(101, 102): 2, (102, 101): 1}) 조합
@@ -134,13 +135,55 @@ class BPETokenizer:
 
         bytes와 tuple은 JSON에 바로 저장할 수 없으므로 type 정보를 함께 저장하세요.
         """
-        raise NotImplementedError("BPETokenizer.save를 구현하세요.")
+        path = Path(path)
+        data = {
+            "vocab_size": self.vocab_size,
+            "merges": [list(pair) for pair in self.merges],
+            "id_to_token": {},
+        }
+
+        for token_id, token in self.id_to_token.items():
+            if isinstance(token, str):
+                token_data = {"type": "str", "value": token}
+            elif isinstance(token, bytes):
+                token_data = {"type": "bytes", "value": list(token)}
+            elif isinstance(token, tuple):
+                token_data = {"type": "tuple", "value": list(token)}
+            else:
+                raise TypeError(f"Unsupported token type: {type(token)!r}")
+
+            data["id_to_token"][str(token_id)] = token_data
+
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def load(self, path: str | Path):
         """
         TODO: save()로 저장한 JSON 파일을 읽어 vocabulary와 merge rule을 복원합니다.
         """
-        raise NotImplementedError("BPETokenizer.load를 구현하세요.")
+        path = Path(path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+        self.vocab_size = data["vocab_size"]
+        self.merges = [tuple(pair) for pair in data["merges"]]
+        self.id_to_token = {}
+        self.token_to_id = {}
+
+        for token_id, token_data in data["id_to_token"].items():
+            token_type = token_data["type"]
+            value = token_data["value"]
+
+            if token_type == "str":
+                token = value
+            elif token_type == "bytes":
+                token = bytes(value)
+            elif token_type == "tuple":
+                token = tuple(value)
+            else:
+                raise ValueError(f"Unsupported token type: {token_type!r}")
+
+            token_id = int(token_id)
+            self.id_to_token[token_id] = token
+            self.token_to_id[token] = token_id
 
     def encode(self, text: str, add_bos_eos: bool = False) -> list[int]:
         """
@@ -170,7 +213,7 @@ class BPETokenizer:
                 continue
             
         merge_id = self.token_to_id[pair] 
- 
+
         #추가 식별자 저장 리스트  
         new_ids = []
         i = 0 
