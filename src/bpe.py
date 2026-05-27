@@ -90,7 +90,7 @@ class BPETokenizer:
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
         
-                self._init_special_tokens()
+        self._init_special_tokens()
         self.merges = []
 
         ids = []
@@ -156,15 +156,32 @@ class BPETokenizer:
             self._init_special_tokens()
         
         emp_list = []
-                
-        #2. text -> utf-8 bytes로 바꾼다. 
+        #2. text -> utf-8 bytes로 바꾼다.
         byte_seq = text.encode("utf-8")  #"AB".encode("utf-8") = b"AB" -> [65,66]
-        
+
         #3. 변환한 bytes를 꺼내서 리스트에 반환하라 
         for byte_value in byte_seq:
             token_id = BYTE_OFFSET + byte_value 
             emp_list.append(token_id)
             
+            
+        for pair in self.merges:
+            if pair not in self.token_to_id:
+                continue
+            
+        merge_id = self.token_to_id[pair] 
+ 
+        #추가 식별자 저장 리스트  
+        new_ids = []
+        i = 0 
+        
+        while i < len(emp_list):
+            if i + 1 < len(emp_list) and (emp_list[i], emp_list[i + 1]) == pair: 
+                new_ids.append(merge_id)
+                i += 2 
+            else: 
+                new_ids.append(emp_list[i])
+                
         #4. 앞뒤로 특수토큰 붙이기     
         if add_bos_eos: 
             emp_list = [self.get_bos_id()] + emp_list + [self.get_eos_id()]
