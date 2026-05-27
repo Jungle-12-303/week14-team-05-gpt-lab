@@ -24,17 +24,20 @@ class InputEmbedding(nn.Module):
         drop_rate: float = 0.1,
     ):
         super().__init__()
+        self.vocab_size = vocab_size
         self.emb_dim = emb_dim
         self.context_length = context_length
-
-        # 토큰 ID를 emb_dim 차원의 벡터로 변환
-        self.token_embedding = nn.Embedding(vocab_size, emb_dim)
-
-        # 위치 ID를 emb_dim 차원의 벡터로 변환
-        self.position_embedding = nn.Embedding(context_length, emb_dim)
-
+        # PyTorch의 nn.Module은 내부적으로 __call__()이 구현되어 있어서 객체를 함수처럼 부를 수 있어요.
+        # nn.Embedding(num_embeddings, embedding_dim)
+        # num_embeddings = 총 몇 개의 ID를 임베딩할 것인가
+        # embedding_dim = 각 ID를 몇 차원 벡터로 바꿀 것인가
+        self.token_embedding = nn.Embedding(self.vocab_size, self.emb_dim)
+        self.position_embedding = nn.Embedding(self.context_length,
+                                               self.emb_dim)
+        # 학습 중 drop_rate 비율만큼 값을 랜덤하게 0으로 만들어 과적합을 줄인다.
+        # self.dropout = Dropout.__init__(drop_rate)
         self.dropout = nn.Dropout(drop_rate)
-        
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         token embedding과 position embedding을 더한 뒤 dropout을 적용합니다.
@@ -45,25 +48,31 @@ class InputEmbedding(nn.Module):
         Returns:
             (batch_size, seq_len, emb_dim)
         """
+        batch_size, seq_len = x.shape
 
-        # position embedding 범위를 넘는 입력 길이를 검사하는 방어 코드
-        seq_len = x.shape[1]
-        if seq_len > self.context_length:
-            raise ValueError(f"seq_len ({seq_len}) must be <= context_length ({self.context_length})")
+        # 실제의미 token_embeds = self.token_embedding.forward(x)
+        # x:
+        # [[1,   2,   3  ],
+        #  [0,   4,   2  ]]
 
-        # 토큰 임베딩 -> 각 token ID를 emb_dim 차원의 벡터로 변환
-        token_emb = self.token_embedding(x)
-        
-        # position_ids를 x와 같은 장치(CPU 또는 GPU)에 만든다. (device mismatch 예방 목적)
-        position_ids = torch.arange(seq_len, device=x.device)
+        #             ↓ ID → 벡터로 교체
 
-        # 위치 임베딩 -> position_ids(0, 1, ..., seq_len-1)를 위치별 emb_dim 차원 벡터로 변환
-        pos_emb = self.position_embedding(position_ids)
+        # token_embeds:
+        # [[[0.4, 0.5, 0.6],   ← ID 1의 벡터
+        # [0.7, 0.8, 0.9],   ← ID 2의 벡터
+        # [1.0, 1.1, 1.2]],  ← ID 3의 벡터
 
-        # 토큰 임베딩과 위치 임베딩을 더한다. (pos_emb는 batch 차원으로 broadcasting)
-        input_emb = token_emb + pos_emb
+        # [[0.1, 0.2, 0.3],   ← ID 0의 벡터
+        # [1.3, 1.4, 1.5],   ← ID 4의 벡터
+        # [0.7, 0.8, 0.9]]]  ← ID 2의 벡터
+        token_embeds = self.token_embedding(x)
 
-        # 드롭아웃을 적용하여 반환 
-        # tensor의 일부 값이 0으로 바뀐다. 드롭아웃 확률은 원소별로 독립적으로 적용된다.
-        return self.dropout(input_emb)
-        
+        # 0 ~ seq_len - 1까지 숫자 만들고, x와 같은 장치(CPU, GPU)에 만들어라
+        positions = torch.arange(seq_len, device=x.device)
+        position_embeds = self.position_embedding(positions)
+
+        x = token_embeds + position_embeds
+        # self.dropout.forward(x)
+        x = self.dropout(x)
+
+        return x

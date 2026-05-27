@@ -20,12 +20,21 @@ class GPTDataset(Dataset):
         context_length: int,
         stride: int | None = None,
     ):
+        if context_length <= 0:
+            raise ValueError("context_length must be positive")
+
         self.token_ids = token_ids
         self.context_length = context_length
         self.stride = stride if stride is not None else context_length
-        # 만들 수 있는 학습 샘플 개수
-        sample_count = (len(token_ids) - context_length - 1) // self.stride + 1
-        self._length = max(0, sample_count) # 음수가 나오지 않게 보정
+
+        if self.stride <= 0:
+            raise ValueError("stride must be positive")
+
+        # target은 input보다 한 칸 뒤라서 샘플 하나에 context_length + 1개 토큰이 필요합니다.
+        # 가능한 시작 위치를 stride 간격으로 세어 전체 학습 샘플 수를 구합니다.
+        self._length = max(
+            0,
+            (len(self.token_ids) - self.context_length - 1) // self.stride + 1)
 
     def __len__(self) -> int:
         """전체 샘플 개수를 반환합니다."""
@@ -39,20 +48,21 @@ class GPTDataset(Dataset):
             input_ids: (context_length,)
             target_ids: (context_length,)
         """
+        if idx < 0 or idx >= self._length:
+            raise IndexError("index out of range")
 
-        # 시작과 끝 인덱스 확보
         start = idx * self.stride
         end = start + self.context_length
-        
-        # 학습용 데이터 샘플링
-        input_ids_list = self.token_ids[start:end]
-        target_ids_list = self.token_ids[start + 1:end + 1]
 
-        # PyTorch 모델에서 사용할 수 있도록 토큰 ID 리스트를 torch.long(int64) 텐서로 변환
-        input_ids = torch.tensor(input_ids_list, dtype=torch.long)
-        target_ids = torch.tensor(target_ids_list, dtype=torch.long)
-        
-        return (input_ids, target_ids)
+        input_ids = self.token_ids[start:end]
+        target_ids = self.token_ids[start + 1:end + 1]
+
+        # 리스트를 PyTorch 텐서로 바꾸고, 정수형 LongTensor로 만듬
+        return (
+            torch.tensor(input_ids, dtype=torch.long),
+            torch.tensor(target_ids, dtype=torch.long),
+        )
+
 
 def create_dataloader(
     token_ids: list[int],
@@ -64,17 +74,12 @@ def create_dataloader(
     num_workers: int = 0,
 ) -> DataLoader:
     """GPTDataset을 만들고 torch.utils.data.DataLoader로 감싸 반환합니다."""
+    dataset = GPTDataset(token_ids, context_length, stride)
 
-    # GPTDataset은 전체 샘플 개수를 알려주고, idx번째 샘플로 tensor 쌍을 반환
-    dataset = GPTDataset(token_ids, context_length, stride=stride)
-
-    # DataLoader는 Dataset에서 여러 샘플을 꺼내 배치로 묶어 반환
-    result = DataLoader(
+    return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         drop_last=drop_last,
         num_workers=num_workers,
     )
-
-    return result
