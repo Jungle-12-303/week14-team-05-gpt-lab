@@ -63,5 +63,18 @@ def create_dataloader(
     shuffle: bool = True,
     num_workers: int = 0,
 ) -> DataLoader:
-    """TODO: GPTDataset을 만들고 torch.utils.data.DataLoader로 감싸 반환합니다."""
-    raise NotImplementedError("create_dataloader를 구현하세요.")
+    """GPTDataset을 만들고 torch.utils.data.DataLoader로 감싸 반환합니다."""
+
+    # GPTDataset은 전체 샘플 개수를 알려주고, idx번째 샘플로 tensor 쌍을 반환
+    dataset = GPTDataset(token_ids, context_length, stride=stride)
+
+    # DataLoader는 Dataset에서 여러 샘플을 꺼내 배치로 묶어 반환
+    result = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+
+    return result
