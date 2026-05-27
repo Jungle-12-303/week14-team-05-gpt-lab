@@ -67,17 +67,61 @@ class BPETokenizer:
         """문장 끝 토큰 ID."""
         return SPECIAL_IDS[EOS_TOKEN]
 
+    # 코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
     def train(self, corpus: str):
         """
-        TODO: 코퍼스에서 BPE merge rule과 vocabulary를 학습합니다.
-
-        구현 힌트:
         - `corpus.encode("utf-8")`로 byte ID 시퀀스를 만듭니다.
         - 가장 자주 등장하는 이웃 token pair를 찾습니다.
         - 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
         - `self.merges`, `self.id_to_token`, `self.token_to_id`를 갱신합니다.
         """
-        raise NotImplementedError("BPETokenizer.train을 구현하세요.")
+        # 초기화
+        self._init_special_tokens()
+
+        # `corpus.encode("utf-8")`로 byte ID 시퀀스를 만듭니다.
+        corpus_byte = corpus.encode("utf-8")
+
+        ids = []
+        for byte in corpus_byte:
+            ids.append(self.token_to_id[bytes([byte])])
+
+        # 가장 자주 등장하는 이웃 token pair를 찾습니다.
+        # 새 token ID를 만들고, 시퀀스의 해당 pair를 새 ID로 치환합니다.
+        while len(self.id_to_token) < self.vocab_size:
+            pair_counts = {}
+
+            for i in range(len(ids) - 1):
+                pair = (ids[i], ids[i+1])
+                
+                if pair in pair_counts:
+                    pair_counts[pair] += 1
+                else:
+                    pair_counts[pair] = 1
+
+            if pair_counts:
+                best_pair = max(pair_counts, key=pair_counts.get)
+            else:
+                break
+
+            new_id = len(self.id_to_token)
+            self.id_to_token[new_id] = best_pair
+            self.token_to_id[best_pair] = new_id
+            self.merges.append(best_pair)
+
+            new_ids = []
+            i = 0
+            while i < len(ids)-1:
+                if (ids[i], ids[i+1]) == best_pair:
+                    new_ids.append(new_id)
+                    i += 2
+                else:
+                    new_ids.append(ids[i])
+                    i += 1
+    
+            if i < len(ids):
+                new_ids.append(ids[i])
+
+            ids = new_ids
 
     # vocabulary와 merge rule을 JSON 파일로 저장합니다.
     def save(self, path: str | Path):
