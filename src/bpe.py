@@ -207,23 +207,26 @@ class BPETokenizer:
             token_id = BYTE_OFFSET + byte_value 
             emp_list.append(token_id)
             
-            
+        # 학습된 merge rule은 순서대로 적용한다.
         for pair in self.merges:
             if pair not in self.token_to_id:
                 continue
-            
-        merge_id = self.token_to_id[pair] 
 
-        #추가 식별자 저장 리스트  
-        new_ids = []
-        i = 0 
-        
-        while i < len(emp_list):
-            if i + 1 < len(emp_list) and (emp_list[i], emp_list[i + 1]) == pair: 
-                new_ids.append(merge_id)
-                i += 2 
-            else: 
-                new_ids.append(emp_list[i])
+            merge_id = self.token_to_id[pair] 
+
+            # pair가 맞으면 새 merge id로 바꾸고 2칸, 아니면 그대로 두고 1칸 이동한다.
+            new_ids = []
+            i = 0 
+            
+            while i < len(emp_list):
+                if i + 1 < len(emp_list) and (emp_list[i], emp_list[i + 1]) == pair: 
+                    new_ids.append(merge_id)
+                    i += 2 
+                else: 
+                    new_ids.append(emp_list[i])
+                    i += 1
+
+            emp_list = new_ids
                 
         #4. 앞뒤로 특수토큰 붙이기     
         if add_bos_eos: 
