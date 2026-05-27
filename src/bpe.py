@@ -245,21 +245,32 @@ class BPETokenizer:
         #1. vocab이 비어있으면, init_special_tokens로 채워 넣기 
         if not self.id_to_token: 
             self._init_special_tokens()
-            
-        #1. [65] -> bytes -> text : "A"
+
+        def token_id_to_bytes(token_id: int) -> list[int]:
+            token = self.id_to_token.get(token_id)
+
+            if token is None:
+                raise ValueError(f"Unknown token id: {token_id}")
+            if isinstance(token, bytes):
+                return list(token)
+            if isinstance(token, tuple):
+                byte_values = []
+                for sub_token_id in token:
+                    byte_values.extend(token_id_to_bytes(sub_token_id))
+                return byte_values
+            if isinstance(token, str):
+                return list(token.encode("utf-8"))
+
+            raise TypeError(f"Unsupported token type: {type(token)!r}")
+
         byte_values = []
         
         for token_id in emp_list:
             if skip_special and token_id in SPECIAL_IDS.values():
                 continue
-            
-            byte_value = token_id - BYTE_OFFSET
-            byte_values.append(byte_value)
-        
-        #2. bytes_values = [234, 176 , 128] -> 234 ➡️ 0xEA
-        #                                   -> 176 ➡️ 0xB0
-        #                                   -> 128 ➡️ 0x80
 
+            byte_values.extend(token_id_to_bytes(token_id))
+        
         text = bytes(byte_values).decode("utf-8")
         return text    
         
