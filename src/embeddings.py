@@ -26,12 +26,18 @@ class InputEmbedding(nn.Module):
         super().__init__()
         self.emb_dim = emb_dim
         self.context_length = context_length
-        # TODO: token_embedding, position_embedding, dropout을 정의하세요.
-        raise NotImplementedError("InputEmbedding.__init__을 구현하세요.")
 
+        # 토큰 ID를 emb_dim 차원의 벡터로 변환
+        self.token_embedding = nn.Embedding(vocab_size, emb_dim)
+
+        # 위치 ID를 emb_dim 차원의 벡터로 변환
+        self.position_embedding = nn.Embedding(context_length, emb_dim)
+
+        self.dropout = nn.Dropout(drop_rate)
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        TODO: token embedding과 position embedding을 더한 뒤 dropout을 적용합니다.
+        token embedding과 position embedding을 더한 뒤 dropout을 적용합니다.
 
         Args:
             x: (batch_size, seq_len) token IDs
@@ -39,4 +45,19 @@ class InputEmbedding(nn.Module):
         Returns:
             (batch_size, seq_len, emb_dim)
         """
-        raise NotImplementedError("InputEmbedding.forward를 구현하세요.")
+
+        # 토큰 임베딩
+        token_emb = self.token_embedding(x)
+        
+        # position_ids를 x와 같은 장치(CPU 또는 GPU)에 만든다.
+        position_ids = torch.arange(x.shape[1], device=x.device)
+
+        # 위치 임베딩
+        pos_emb = self.position_embedding(position_ids)
+
+        # 토큰 임베딩과 위치 임베딩을 더한다.
+        input_emb = token_emb + pos_emb
+
+        # 드롭아웃을 적용하여 반환
+        return self.dropout(input_emb)
+        
