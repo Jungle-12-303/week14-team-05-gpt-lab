@@ -13,7 +13,9 @@ class GPTDataset(Dataset):
     - input:  [10, 11, 12]
     - target: [11, 12, 13]
     """
-
+    
+    # 입력 : token_ids[start : start + context_length]
+    # 정답 : token_ids[start + 1 : start + context_length + 1]
     def __init__(
         self,
         token_ids: list[int],
@@ -23,8 +25,10 @@ class GPTDataset(Dataset):
         self.token_ids = token_ids
         self.context_length = context_length
         self.stride = stride if stride is not None else context_length
-        # TODO: 만들 수 있는 학습 샘플 개수를 self._length에 저장하세요.
-        raise NotImplementedError("GPTDataset.__init__에서 self._length를 구현하세요.")
+
+        # 만들 수 있는 학습 샘플 개수를 self._length에 저장하세요.
+        last_start = len(self.token_ids) - self.context_length - 1
+        self._length = max(0, last_start // self.stride + 1)
 
     def __len__(self) -> int:
         """TODO: 전체 샘플 개수를 반환합니다."""
