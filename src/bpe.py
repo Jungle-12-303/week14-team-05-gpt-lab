@@ -39,6 +39,8 @@ class BPETokenizer:
         self.merges = []
 
     def _init_special_tokens(self):
+        self.id_to_token = {}
+        self.token_to_id = {}
 
         # 1. 특수 토큰 4개를 고정 ID 0~3에 등록합니다
         for token, token_id in SPECIAL_IDS.items():
