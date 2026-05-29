@@ -76,12 +76,25 @@ class TransformerBlock(nn.Module):
         qkv_bias: bool = False,
     ):
         super().__init__()
-        # TODO: attention, ffn, layernorm, dropout을 정의하세요.
-        raise NotImplementedError("TransformerBlock.__init__을 구현하세요.")
+        # attention, ffn, layernorm, dropout을 정의하세요.
+        self.attention = MultiHeadAttention(
+            d_model=d_model, n_heads=n_heads, drop_rate=drop_rate, qkv_bias=qkv_bias
+        )
+
+        self.ffn = FeedForward(d_model=d_model, dropout=drop_rate)
+
+        self.layernorm1 = LayerNorm(d_model)
+        self.layernorm2 = LayerNorm(d_model)
+
+        self.dropout = nn.Dropout(drop_rate)
 
     def forward(self, x: torch.Tensor, causal_mask: bool = True) -> torch.Tensor:
-        """TODO: attention과 ffn을 residual connection으로 연결합니다."""
-        raise NotImplementedError("TransformerBlock.forward를 구현하세요.")
+        """attention과 ffn을 residual connection으로 연결합니다."""
+        x = x + self.dropout(
+            self.attention(self.layernorm1(x), causal_mask=causal_mask)
+        )
+        x = x + self.dropout(self.ffn(self.layernorm2(x)))
+        return x
 
 
 class GPTModel(nn.Module):
