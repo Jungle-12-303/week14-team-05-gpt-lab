@@ -74,12 +74,34 @@ class TransformerBlock(nn.Module):
         qkv_bias: bool = False,
     ):
         super().__init__()
-        # TODO: attention, ffn, layernorm, dropout을 정의하세요.
-        raise NotImplementedError("TransformerBlock.__init__을 구현하세요.")
+        # attention, ffn, layernorm, dropout을 정의
+        self.attention = MultiHeadAttention(
+            d_model=d_model,  # 입력/출력 벡터 크기 (예: 512)
+            n_heads=n_heads,  # attention head 개수, d_model을 나눠 병렬 처리
+            drop_rate=drop_rate,  # dropout 확률 (과적합 방지)
+            qkv_bias=qkv_bias,
+        )
+        self.ffn = FeedForward(d_model, dropout=drop_rate)
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+        self.drop_shortcut = nn.Dropout(drop_rate)
+
 
     def forward(self, x: torch.Tensor, causal_mask: bool = True) -> torch.Tensor:
-        """TODO: attention과 ffn을 residual connection으로 연결합니다."""
-        raise NotImplementedError("TransformerBlock.forward를 구현하세요.")
+        """attention과 ffn을 residual connection으로 연결합니다."""
+        shortcut = x  # 원본 x (어텐션 블록을 위한 숏컷 연결)
+        x = self.norm1(x)
+        x = self.attention(x, causal_mask=causal_mask)  # attention 적용
+        x = self.drop_shortcut(x)  # attention을 거친 출력에 dropout을 적용
+        x = x + shortcut
+
+        shortcut = x  # attention 결과가 반영된 x를 FFN 블록의 shortcut으로 보존
+        x = self.norm2(x)
+        x = self.ffn(x)  # ffn 적용
+        x = self.drop_shortcut(x)  # ffn을 거친 출력에 dropout을 적용
+        x = x + shortcut
+
+        return x
 
 
 class GPTModel(nn.Module):
