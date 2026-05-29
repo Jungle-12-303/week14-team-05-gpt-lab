@@ -3,6 +3,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 try:
     from .attention import MultiHeadAttention
@@ -100,11 +101,39 @@ class TransformerBlock(nn.Module):
 class GPTModel(nn.Module):
     """InputEmbedding -> TransformerBlock N개 -> LayerNorm -> LM head."""
 
+    """
+    GPT_CONFIG_SMALL = {
+        "vocab_size": 1000,
+        "context_length": 64,
+        "emb_dim": 64,
+        "n_heads": 4,
+        "n_layers": 2,
+        "drop_rate": 0.1,
+        "qkv_bias": False,
+    }
+    """
+
     def __init__(self, config: dict):
         super().__init__()
         self.config = config
-        # TODO: embedding, blocks, final layernorm, lm_head를 정의하세요.
-        raise NotImplementedError("GPTModel.__init__을 구현하세요.")
+        # embedding, blocks, final layernorm, lm_head를 정의하세요.
+        self.embedding = InputEmbedding(
+            config["vocab_size"],
+            config["emb_dim"],
+            config["context_length"],
+            config["drop_rate"],
+        )
+        self.blocks = [
+            TransformerBlock(
+                config["emb_dim"],
+                config["n_heads"],
+                config["drop_rate"],
+                config["qkv_bias"],
+            )
+            for _ in range(config["n_layers"])
+        ]
+        self.final_layernorm = LayerNorm(config["emb_dim"])
+        self.lm_head = nn.Linear(config["emb_dim"], config["vocab_size"], bias=False)
 
     def forward(
         self,
@@ -112,13 +141,25 @@ class GPTModel(nn.Module):
         targets: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: logits를 만들고, targets가 있으면 cross entropy loss도 함께 반환합니다.
+        logits를 만들고, targets가 있으면 cross entropy loss도 함께 반환합니다.
 
         Returns:
             targets가 None이면 logits
             targets가 있으면 (loss, logits)
         """
-        raise NotImplementedError("GPTModel.forward를 구현하세요.")
+        x = self.embedding(idx)
+
+        for block in self.blocks:
+            x = block(x)
+
+        x = self.final_layernorm(x)
+        logits = self.lm_head(x)
+
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            return loss, logits
+
+        return logits
 
 
 def generate_text_simple(
