@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """GPT 모델 구성 요소 과제 템플릿."""
 
+import math
 import torch
 import torch.nn as nn
 
@@ -28,12 +29,17 @@ class LayerNorm(nn.Module):
         norm_x = (x - mean) / torch.sqrt(var + self.eps)
         return self.gamma * norm_x + self.beta
 
+
 class GELU(nn.Module):
     """GPT FeedForward에서 사용하는 GELU 활성화 함수."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """TODO: tanh 근사식 또는 torch 연산으로 GELU를 구현합니다."""
-        raise NotImplementedError("GELU.forward를 구현하세요.")
+        """tanh 근사식 또는 torch 연산으로 GELU를 구현합니다."""
+        # GELU의 tanh 근사식:
+        # GELU(x) = 0.5*x*(1 + tanh(sqrt(2/pi) * (x + 0.044715*x^3)))
+        return 0.5 * x * (
+            1 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * x**3))
+        )
 
 
 class FeedForward(nn.Module):
