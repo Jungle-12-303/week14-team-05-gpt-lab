@@ -109,30 +109,86 @@ class GPTModel(nn.Module):
 
     def __init__(self, config: dict):
         super().__init__()
-        self.config = config
-        # TODO: embedding, blocks, final layernorm, lm_head를 정의하세요.
-        raise NotImplementedError("GPTModel.__init__을 구현하세요.")
+        self.config = config  # config는 모델 설정값을 담은 딕셔너리
 
+        d_model = config["emb_dim"]
+        vocab_size = config["vocab_size"]
+
+        # embedding, blocks, final layernorm, lm_head를 정의
+
+        # token id를 Transformer가 처리할 수 있는 벡터로 바꾸는 모듈 만들기
+        # 토큰 임베딩과 위치 임베딩을 포함하고 있음.
+        self.embedding = InputEmbedding(
+            vocab_size=config["vocab_size"],
+            emb_dim=config["emb_dim"],
+            context_length=config["context_length"],
+            drop_rate=config["drop_rate"],
+        )
+
+        # TransformerBlock 여러 개를 순서대로 쌓기
+        # (참고) 하나의 블록 안에는 LayerNorm, Causal Self-Attention, Residual connection, LayerNorm, FeedForward, Residual connection 이 들어있다.
+        self.transformer_blocks = nn.Sequential(
+            *[
+                TransformerBlock(
+                    d_model=d_model,
+                    n_heads=config["n_heads"],
+                    drop_rate=config["drop_rate"],
+                    qkv_bias=config["qkv_bias"],  # Q, K, V projection에서 bias 사용 여부
+                ) 
+                for _ in range(config["n_layers"])  # 블록을 n_layers개 만들겠다는 뜻
+            ]
+        )
+
+        # 모든 TransformerBlock을 통과한 뒤 마지막으로 정규화를 한 번 적용
+        self.final_layernorm = LayerNorm(d_model)
+
+        # hidden vector를 vocab_size 크기의 logits로 변환
+        self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
+ 
     def forward(
         self,
         idx: torch.Tensor,
         targets: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: logits를 만들고, targets가 있으면 cross entropy loss도 함께 반환합니다.
+        logits를 만들고, targets가 있으면 cross entropy loss도 함께 반환합니다.
 
         Returns:
             targets가 None이면 logits
             targets가 있으면 (loss, logits)
         """
-        raise NotImplementedError("GPTModel.forward를 구현하세요.")
+
+        x = self.embedding(idx)
+        x = self.transformer_blocks(x)
+        x = self.final_layernorm(x)
+        logits = self.lm_head(x)
+
+        if targets is None:
+            return logits
+        
+        #  PyTorch가 제공하는 표준 cross entropy 함수를 사용해서 loss 구하기
+        loss_fn = nn.CrossEntropyLoss()
+        loss = loss_fn(logits.view(-1, logits.size(-1)), targets.view(-1))
+
+        return (loss, logits)
 
 
 def generate_text_simple(
     model: GPTModel,
-    idx: torch.Tensor,
-    max_new_tokens: int,
+    idx: torch.Tensor,  # 현재까지의 토큰 ID - (batch_size, current_seq_len)
+    max_new_tokens: int,  # 앞으로 몇 개의 새 토큰을 생성할지
     context_size: int,
 ) -> torch.Tensor:
-    """TODO: greedy 방식으로 max_new_tokens만큼 다음 토큰을 이어 붙입니다."""
-    raise NotImplementedError("generate_text_simple을 구현하세요.")
+    """greedy 방식으로 max_new_tokens만큼 다음 토큰을 이어 붙입니다."""
+    
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size:]  # 모델이 처리할 수 있는 최대 context 길이만 남김
+        with torch.no_grad():
+            logits = model(idx_cond)  # 현재 context에 대한 logits 계산
+
+        logits = logits[:, -1, :]  # 마지막 위치의 다음 토큰 예측만 사용
+        probas = torch.softmax(logits, dim=-1)  # 점수를 확률로 변환
+        idx_next = torch.argmax(probas, dim=-1, keepdim=True)  # 가장 확률이 높은 토큰 선택
+        idx = torch.cat((idx,idx_next), dim=1)  # 선택한 토큰을 기존 sequence 뒤에 붙임
+
+    return idx
