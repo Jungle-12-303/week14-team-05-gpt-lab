@@ -3,6 +3,7 @@
 
 import matplotlib.pyplot as plt
 import torch
+from bpe import BPETokenizer as bpe_tkzr
 
 try:
     from .model import GPTModel
@@ -157,7 +158,27 @@ def generate_and_print_sample(
     top_k: int | None = 40,
 ) -> None:
     """start_context를 encode하고 generate 후 decode하여 출력합니다."""
-    raise NotImplementedError("generate_and_print_sample을 구현하세요.")
+
+    model.eval()  # PyTorch 모델을 평가 모드로 전환(Dropout 미적용)
+
+    # tokenizer 출력은 list[int]이므로 모델 입력 형태인 (1, T) LongTensor로 변환
+    input_token_ids = tokenizer.encode(start_context)
+    input_tensor = torch.tensor(input_token_ids, dtype=torch.long).unsqueeze(0).to(device)
+
+    output_tensor = generate(
+        model=model,
+        idx=input_tensor,
+        max_new_tokens=max_new_tokens,
+        context_size=context_size,
+        temperature=temperature,
+        top_k=top_k,
+    )
+
+    # batch 차원을 제거한 뒤 decode가 받을 수 있는 token id list로 변환
+    output_token_ids = output_tensor.squeeze(0).tolist()
+    output_text = tokenizer.decode(output_token_ids)
+    
+    print(output_text)
 
 
 def train_model(
