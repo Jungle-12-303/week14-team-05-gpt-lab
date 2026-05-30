@@ -62,8 +62,15 @@ def save_checkpoint(
     global_step: int,
     path: str,
 ) -> None:
-    """TODO: model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
-    raise NotImplementedError("save_checkpoint를 구현하세요.")
+    """model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
+
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "epoch": epoch,
+        "global_step": global_step,
+    }
+    torch.save(checkpoint, path)
 
 
 def load_checkpoint(
@@ -72,8 +79,23 @@ def load_checkpoint(
     path: str,
     device: torch.device,
 ) -> tuple[int, int]:
-    """TODO: torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
-    raise NotImplementedError("load_checkpoint를 구현하세요.")
+    """ torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
+    
+    # 저장 당시 device와 현재 실행 device가 다를 수 있으므로 현재 device에 맞춰 로드한다.
+    checkpoint = torch.load(path, map_location=device)
+
+    # checkpoint에서 모델 가중치만 꺼내 현재 model 인스턴스에 복원한다.
+    model.load_state_dict(checkpoint["model_state_dict"])
+
+    # 이어서 학습할 경우 optimizer 내부 상태도 복원한다.
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    
+    # 학습을 중단한 위치부터 재개할 수 있도록 위치 정보를 반환한다.
+    epoch = checkpoint["epoch"]
+    global_step = checkpoint["global_step"]
+    
+    return epoch, global_step
 
 
 def generate(
