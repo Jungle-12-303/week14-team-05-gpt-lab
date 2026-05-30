@@ -119,15 +119,46 @@ def load_checkpoint(
 # temperature와 top-k를 적용해 다음 토큰을 순차적으로 생성합니다.
 def generate(
     model: GPTModel,
-    idx: torch.Tensor,
-    max_new_tokens: int,
-    context_size: int,
+    idx: torch.Tensor,  # 현재까지의 입력 토큰 ID 시퀀스. (batch_size, seq_len)
+    max_new_tokens: int,  # 새로 생성할 최대 토큰 수
+    context_size: int,  # 모델이 한번에 볼 수 있는 최대 문맥 길이
     temperature: float = 1.0,
     top_k: int | None = None,
-    eos_id: int | None = None,
-) -> torch.Tensor:
-    """TODO: temperature와 top-k 샘플링을 지원하는 생성 함수를 구현합니다."""
-    raise NotImplementedError("generate를 구현하세요.")
+    eos_id: int | None = None,  # 문장 종료 토큰 ID
+) -> torch.Tensor:  # idx 뒤에 새 토큰이 붙은 최종 시퀀스
+    """temperature와 top-k 샘플링을 지원하는 생성 함수를 구현합니다."""
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size:]
+        with torch.no_grad():
+            logits = model(idx_cond)
+        logits = logits[:, -1, :]  # 현재 문맥 다음에 올 토큰 1개의 분포만 사용
+
+        if top_k is not None:
+            # torch.topk()는 (values, indices)를 반환하며, indices는 선택된 값들의 원래 위치입니다.
+            top_logits, _ = torch.topk(logits, top_k)
+            min_val = top_logits[
+                :, -1
+            ]  # 기본적으로 내림차순 정렬이기 때문에 top-k 안에서 가장 작은 값을 가리킴
+
+            # torch.where(조건, 조건이_참일때_값, 거짓일때_값)
+            logits = torch.where(
+                logits < min_val, torch.tensor(float("-inf")).to(logits.device), logits
+            )
+
+        if temperature > 0.0:
+            logits = logits / temperature  # T < 1 : 뾰족, T > 1 : 완만
+            probs = torch.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(
+                probs, num_samples=1
+            )  # 확률분포를 따라 다음 토큰의 인덱스 하나를 뽑는 것
+        else:
+            idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+
+        if idx_next == eos_id:
+            break
+
+        idx = torch.cat((idx, idx_next), dim=1)
+    return idx
 
 
 # 시작 문맥으로 텍스트를 생성하고 사람이 읽을 수 있는 문자열로 출력합니다.
@@ -141,8 +172,7 @@ def generate_and_print_sample(
     temperature: float = 0.8,
     top_k: int | None = 40,
 ) -> None:
-    """TODO: start_context를 encode하고 generate 후 decode하여 출력합니다."""
-    raise NotImplementedError("generate_and_print_sample을 구현하세요.")
+    """start_context를 encode하고 generate 후 decode하여 출력합니다."""
 
 
 # 주기적으로 평가와 샘플 생성을 수행하며 전체 학습 루프를 실행합니다.
