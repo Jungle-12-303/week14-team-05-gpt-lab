@@ -10,16 +10,28 @@ except ImportError:
     from model import GPTModel
 
 
+# 입력 배치에 대한 모델의 예측 logits와 정답 토큰을 비교해 한 배치의 평균 cross entropy 손실을 계산합니다.
 def calc_loss_batch(
     input_batch: torch.Tensor,
     target_batch: torch.Tensor,
     model: GPTModel,
     device: torch.device,
 ) -> torch.Tensor:
-    """TODO: 한 배치를 device로 옮긴 뒤 다음 토큰 예측 cross entropy loss를 계산합니다."""
-    raise NotImplementedError("calc_loss_batch를 구현하세요.")
+    """한 배치를 device로 옮긴 뒤 다음 토큰 예측 cross entropy loss를 계산합니다."""
+    # 입력 배치와 정답 배치를 모델과 같은 device로 옮겨 연산 가능하게 맞춥니다.
+    input_batch = input_batch.to(device)
+    target_batch = target_batch.to(device)
+
+    # 입력 배치를 모델에 넣어 각 위치의 logits를 계산합니다.
+    # logits : (batch_size, seq_len, vocab_size)
+    logits = model(input_batch)[:, -1, :]
+
+    # 다음 토큰 예측용 cross entropy loss를 계산합니다.
+    loss = torch.nn.functional.cross_entropy(logits, target_batch)
+    return loss
 
 
+# 데이터 로더 전체 또는 일부 배치의 평균 손실을 계산합니다.
 def calc_loss_loader(
     data_loader,
     model: GPTModel,
@@ -30,6 +42,7 @@ def calc_loss_loader(
     raise NotImplementedError("calc_loss_loader를 구현하세요.")
 
 
+# 학습 재개에 필요한 모델과 옵티마이저 상태를 저장합니다.
 def save_checkpoint(
     model: GPTModel,
     optimizer: torch.optim.Optimizer,
@@ -41,6 +54,7 @@ def save_checkpoint(
     raise NotImplementedError("save_checkpoint를 구현하세요.")
 
 
+# 저장된 체크포인트에서 모델과 옵티마이저 상태를 복원합니다.
 def load_checkpoint(
     model: GPTModel,
     optimizer: torch.optim.Optimizer | None,
@@ -51,6 +65,7 @@ def load_checkpoint(
     raise NotImplementedError("load_checkpoint를 구현하세요.")
 
 
+# temperature와 top-k를 적용해 다음 토큰을 순차적으로 생성합니다.
 def generate(
     model: GPTModel,
     idx: torch.Tensor,
@@ -64,6 +79,7 @@ def generate(
     raise NotImplementedError("generate를 구현하세요.")
 
 
+# 시작 문맥으로 텍스트를 생성하고 사람이 읽을 수 있는 문자열로 출력합니다.
 def generate_and_print_sample(
     model: GPTModel,
     tokenizer,
@@ -78,6 +94,7 @@ def generate_and_print_sample(
     raise NotImplementedError("generate_and_print_sample을 구현하세요.")
 
 
+# 주기적으로 평가와 샘플 생성을 수행하며 전체 학습 루프를 실행합니다.
 def train_model(
     model: GPTModel,
     train_loader,
@@ -97,7 +114,10 @@ def train_model(
     raise NotImplementedError("train_model을 구현하세요.")
 
 
-def plot_losses(train_losses: list[float], val_losses: list[float] | None = None) -> None:
+# epoch별 훈련 및 선택적 검증 손실 곡선을 시각화합니다.
+def plot_losses(
+    train_losses: list[float], val_losses: list[float] | None = None
+) -> None:
     """훈련/검증 손실 그래프를 그리는 제공 함수."""
     plt.plot(train_losses, label="Train")
     if val_losses is not None:
