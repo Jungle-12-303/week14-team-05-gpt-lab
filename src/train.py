@@ -3,6 +3,7 @@
 
 import matplotlib.pyplot as plt
 import torch
+import torch.nn.functional as F
 
 try:
     from .model import GPTModel
@@ -23,11 +24,14 @@ def calc_loss_batch(
     target_batch = target_batch.to(device)
 
     # 입력 배치를 모델에 넣어 각 위치의 logits를 계산합니다.
-    # logits : (batch_size, seq_len, vocab_size)
-    logits = model(input_batch)[:, -1, :]
+    logits = model(input_batch)  # (batch_size, seq_len, vocab_size)
 
     # 다음 토큰 예측용 cross entropy loss를 계산합니다.
-    loss = torch.nn.functional.cross_entropy(logits, target_batch)
+    batch_size, seq_len, vocab_size = logits.shape
+    loss = F.cross_entropy(
+        logits.reshape(batch_size * seq_len, vocab_size),
+        target_batch.reshape(batch_size * seq_len),
+    )
     return loss
 
 
