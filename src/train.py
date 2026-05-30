@@ -107,8 +107,43 @@ def generate(
     top_k: int | None = None,
     eos_id: int | None = None,
 ) -> torch.Tensor:
-    """TODO: temperature와 top-k 샘플링을 지원하는 생성 함수를 구현합니다."""
-    raise NotImplementedError("generate를 구현하세요.")
+    """temperature와 top-k 샘플링을 지원하는 생성 함수를 구현합니다."""
+
+    for _ in range(max_new_tokens):
+        # 모델이 처리할 수 있는 최대 context 길이에 맞춰 최근 토큰만 사용
+        idx_cond = idx[:, -context_size:]
+
+        # 생성 단계에서는 학습하지 않으므로 gradient 계산을 기록하지 않는다.
+        with torch.no_grad():
+            logits = model(idx_cond)
+
+        # 마지막 위치의 logits가 현재 문맥 다음 토큰의 분포를 나타낸다.
+        logits = logits[:, -1, :]
+
+        # top-k 밖의 토큰은 softmax 후 확률이 0이 되도록 -inf로 마스킹한다.
+        if top_k is not None:
+            top_k = min(top_k, logits.size(-1))  # 너무 큰 top-k 값은 가용한 최대값으로 자동 보정
+            top_logits, _ = torch.topk(logits, top_k)
+            min_val = top_logits[:, -1, None]  # shape를 (B, 1)로 유지하기 위해 새로운 차원 하나 추가
+            negative_inf = torch.tensor(float("-inf"), device=logits.device, dtype=logits.dtype)
+            logits = torch.where(logits < min_val, negative_inf, logits)  # torch.where(cond, A, B)는 cond의 True/False 여부에 따라 A/B 적용
+        
+        # temperature가 0 이하이면 확률 샘플링 대신 greedy 선택을 사용
+        if temperature <= 0:
+            idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+        else:
+            logits = logits / temperature
+            probs = torch.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+        
+        # 단일 prompt 기준: EOS가 생성되면 반복을 중단
+        # (참고) idx_next는 tensor라서 batch size가 커지면 바로 if에 쓰기 어렵다.
+        if eos_id is not None and idx_next.item() == eos_id:
+            break
+
+        idx = torch.cat((idx, idx_next), dim=1)
+
+    return idx
 
 
 def generate_and_print_sample(
@@ -121,7 +156,7 @@ def generate_and_print_sample(
     temperature: float = 0.8,
     top_k: int | None = 40,
 ) -> None:
-    """TODO: start_context를 encode하고 generate 후 decode하여 출력합니다."""
+    """start_context를 encode하고 generate 후 decode하여 출력합니다."""
     raise NotImplementedError("generate_and_print_sample을 구현하세요.")
 
 
