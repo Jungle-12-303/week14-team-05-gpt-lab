@@ -24,15 +24,35 @@ def calc_loss_batch(
     loss, logits = model(input_batch, targets=target_batch)
     return loss
 
-
+# 배치 손실을 누적해 데이터로더 평균 손실 계산
 def calc_loss_loader(
     data_loader,
     model: GPTModel,
     device: torch.device,
     num_batches: int | None = None,
 ) -> float:
-    """TODO: data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용하세요."""
-    raise NotImplementedError("calc_loss_loader를 구현하세요.")
+    """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용하세요."""
+    
+    total_loss = 0.0  # 손실 합산
+
+    # 배치 길이 검증
+    if len(data_loader) == 0:
+        return float("nan")  # not a number: 정상적인 숫자로 표현할 수 없는 값
+    elif num_batches is None:
+        # num_batches가 지정되지 않으면 모든 배치를 순회
+        num_batches = len(data_loader)
+    else:
+        # num_batches가 데이터 로더에 있는 배치 개수보다 크면 배치 횟수를 데이터 로더에 있는 총 배치 개수로 맞춘다.
+        num_batches = min(num_batches, len(data_loader))
+    
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i < num_batches:
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item()  # 각 배치의 손실을 합산
+        else:
+            break
+    
+    return total_loss / num_batches
 
 
 def save_checkpoint(
