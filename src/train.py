@@ -74,12 +74,20 @@ def calc_loss_loader(
 def save_checkpoint(
     model: GPTModel,
     optimizer: torch.optim.Optimizer,
-    epoch: int,
-    global_step: int,
+    epoch: int,  # 몇 번째 epoch까지 끝냈는지
+    global_step: int,  # 전체 배치 업데이트를 몇 번 했는지
     path: str,
 ) -> None:
-    """TODO: model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
-    raise NotImplementedError("save_checkpoint를 구현하세요.")
+    """model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
+    torch.save(
+        {
+            "model_state_dic": model.state_dict(),
+            "opoptimizer_state_dict": optimizer.state_dict(),
+            "epoch": epoch,
+            "global_step": global_step,
+        },
+        path,
+    )
 
 
 # 저장된 체크포인트에서 모델과 옵티마이저 상태를 복원합니다.
@@ -89,8 +97,23 @@ def load_checkpoint(
     path: str,
     device: torch.device,
 ) -> tuple[int, int]:
-    """TODO: torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
-    raise NotImplementedError("load_checkpoint를 구현하세요.")
+    """torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
+    checkpoint = torch.load(path, map_location=device)
+
+    model.load_state_dict(checkpoint["model_state_dic"])
+
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint["opoptimizer_state_dict"])
+
+    model.to(
+        device
+    )  # PyTorch에서는 모델과 입력 텐서가 보통 같은 device에 있어야 연산할 수 있음
+
+    epoch = checkpoint["epoch"]
+    global_step = checkpoint["global_step"]
+
+    # 저장된 학습 진행 상태(epoch, global_step)를 복원해 호출자에게 반환합니다.
+    return epoch, global_step
 
 
 # temperature와 top-k를 적용해 다음 토큰을 순차적으로 생성합니다.
