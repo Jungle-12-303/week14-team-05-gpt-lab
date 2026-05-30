@@ -181,6 +181,32 @@ def generate_and_print_sample(
     print(output_text)
 
 
+# [헬퍼 함수] train_model 내부에서 사용할 모델 평가용 함수
+def evaluate_model(
+    model: GPTModel,
+    train_loader,
+    val_loader,
+    device: torch.device,
+    eval_iter: int,
+) -> tuple[float, float]:
+    """train/validation loader의 평균 loss를 평가합니다."""
+
+    was_training = model.training  # 현재 모델이 train 모드인지 확인
+    model.eval()  # 평가 모드로 전환
+
+    # 계산 그래프 생성을 끄고 train/val loss 평가
+    with torch.no_grad():
+        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
+
+    if was_training:
+        model.train()  # 평가 전 train 모드 → 평가 후 train 모드로 복귀
+    else:
+        model.eval()  # 평가 전 eval 모드  → 평가 후 eval 모드 유지
+
+    return train_loss, val_loss
+
+
 def train_model(
     model: GPTModel,
     train_loader,
@@ -196,8 +222,72 @@ def train_model(
     start_epoch: int = 0,
     global_step: int = 0,
 ) -> list[float]:
-    """TODO: 사전 학습 루프를 구현하고 epoch별 train loss 리스트를 반환합니다."""
-    raise NotImplementedError("train_model을 구현하세요.")
+    """사전 학습 루프를 구현하고 epoch별 train loss 리스트를 반환합니다."""
+
+    train_losses = []  # epoch별 평균 train loss를 저장할 리스트 (최종 반환값)
+
+    model.to(device)  # 모델 파라미터를 CPU/GPU 같은 지정된 device로 이동
+    model.train()  # 학습 모드로 전환
+
+    # epoch 반복
+    for epoch in range(start_epoch, num_epochs):
+        epoch_loss = 0.0  # 현재 epoch의 batch loss 합계
+        num_batches = 0  # batch 개수
+
+        # 훈련 데이터로부터 input/target batch 하나씩 가져오기
+        for input_batch, target_batch in train_loader:
+            # 이전 batch에서 계산된 gradient 초기화
+            # PyTorch는 gradient를 누적하므로 매 batch마다 필요
+            optimizer.zero_grad()
+
+            # 현재 batch를 모델에 넣고 cross entropy loss 계산
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+
+            loss.backward()  # loss를 기준으로 각 파라미터의 gradient 계산
+            optimizer.step()  # 계산된 gradient로 실제 모델 파라미터 업데이트
+            epoch_loss += loss.item()  # 현재 batch loss 값을 epoch loss 합계에 추가
+            num_batches += 1  # 현재 epoch 안의 batch 수 증가
+            global_step += 1  # 전체 학습 step 수 증가
+
+            # step마다 train/validation loss 평가
+            if eval_freq is not None and global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(
+                    model, train_loader, val_loader, device, eval_iter
+                )
+                val_losses.append(val_loss)
+
+                # 현재 epoch, global step, train loss, validation loss 출력
+                print(
+                    f"Ep {epoch + 1}, Step {global_step}: "
+                    f"train loss {train_loss:.3f}, val loss {val_loss:.3f}"
+                )
+        
+        # 한 epoch 동안의 평균 train loss를 계산해서 기록
+        avg_epoch_loss = epoch_loss / num_batches
+        train_losses.append(avg_epoch_loss)
+
+        # 현재 모델로 샘플 텍스트를 생성해 출력
+        generate_and_print_sample(
+            model=model,
+            tokenizer=tokenizer,
+            device=device,
+            start_context=start_context,
+            context_size=model.config["context_length"],
+        )
+        model.train()  # 학습 모드로 다시 전환
+
+        # ckpt_freq가 설정되어 있으면 지정한 epoch 간격마다 checkpoint를 저장
+        if ckpt_freq is not None and (epoch + 1) % ckpt_freq == 0:
+            # 모델 상태, optimizer 상태, 현재 epoch, global step을 파일로 저장
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                epoch=epoch + 1,
+                global_step=global_step,
+                path=f"checkpoint_epoch_{epoch + 1}.pt",
+            )
+
+    return train_losses
 
 
 def plot_losses(train_losses: list[float], val_losses: list[float] | None = None) -> None:
