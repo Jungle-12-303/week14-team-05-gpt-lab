@@ -42,8 +42,32 @@ def calc_loss_loader(
     device: torch.device,
     num_batches: int | None = None,
 ) -> float:
-    """TODO: data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용하세요."""
-    raise NotImplementedError("calc_loss_loader를 구현하세요.")
+    """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용하세요."""
+    # 배치가 없으면 평균 손실을 계산할 수 없으므로 NaN을 반환합니다.
+    if len(data_loader) == 0:
+        return float("nan")
+
+    # 평가할 배치 수를 정합니다.
+    if num_batches is None:
+        num_batches = len(data_loader)
+    else:
+        if num_batches <= 0:
+            return float("nan")
+        num_batches = min(num_batches, len(data_loader))
+
+    # 선택한 배치들의 손실을 누적합니다.
+    total_loss = 0.0
+
+    for batch_idx, (input_batch, target_batch) in enumerate(
+        data_loader
+    ):  # data_loader의 각 원소는 (input_batch, target_batch)이고, enumerate()를 쓰면 앞에 배치 번호가 붙습니다.
+        if batch_idx >= num_batches:
+            break
+
+        loss = calc_loss_batch(input_batch, target_batch, model, device)
+        total_loss += loss.item()
+
+    return float(total_loss / num_batches)
 
 
 # 학습 재개에 필요한 모델과 옵티마이저 상태를 저장합니다.
