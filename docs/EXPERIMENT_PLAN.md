@@ -122,12 +122,16 @@ if torch.cuda.is_available():
 
 4명 모두 실험을 진행한다. 단, D는 감성 분류 실험과 함께 최종 리포트 취합 책임을 가진다.
 
-| 팀원 | 담당 영역 | 실험 내용 | 주요 산출물 |
-| --- | --- | --- | --- |
-| A | 사전 학습 안정화 | baseline, warmup, cosine decay, gradient clipping, weight decay | 안정화 기법별 train/val loss 비교 |
-| B | 하이퍼파라미터 탐색 1 | batch_size, learning_rate, drop_rate | 학습 설정 관련 best 후보 |
-| C | 하이퍼파라미터 탐색 2 | context_length, n_layers, emb_dim | 모델 크기와 문맥 길이 관련 best 후보 |
-| D | 감성 분류 개선 및 리포트 취합 | class imbalance, freeze, lr 분리, best checkpoint | fine-tuning 결과, 최종 실험표, 그래프 |
+담당자는 랜덤 배정했다.
+
+| 팀원 | 담당자 | 담당 영역 | 실험 내용 | 주요 산출물 | 결과 문서 |
+| --- | --- | --- | --- | --- | --- |
+| A | 재환 | 사전 학습 안정화 | baseline, warmup, cosine decay, gradient clipping, weight decay | 안정화 기법별 train/val loss 비교 | [`EXPERIMENT_A_JAEHWAN.md`](./EXPERIMENT_A_JAEHWAN.md) |
+| B | 영빈 | 하이퍼파라미터 탐색 1 | batch_size, learning_rate, drop_rate | 학습 설정 관련 best 후보 | [`EXPERIMENT_B_YEONGBEEN.md`](./EXPERIMENT_B_YEONGBEEN.md) |
+| C | 범상 | 하이퍼파라미터 탐색 2 | context_length, n_layers, emb_dim | 모델 크기와 문맥 길이 관련 best 후보 | [`EXPERIMENT_C_BEOMSANG.md`](./EXPERIMENT_C_BEOMSANG.md) |
+| D | 형민 | 감성 분류 개선 및 리포트 취합 | class imbalance, freeze, lr 분리, best checkpoint | fine-tuning 결과, 최종 실험표, 그래프 | [`EXPERIMENT_D_HYEONGMIN.md`](./EXPERIMENT_D_HYEONGMIN.md) |
+
+각 담당자는 자기 결과 문서에 실험 환경, 실행 설정, 결과표, 실패 원인, 최종 결론을 기록한다. `EXPERIMENT_PLAN.md`는 전체 운영 계획으로 유지하고, 실제 수치는 담당자별 결과 문서에 먼저 올린 뒤 최종 발표 전 `REPORT.md`로 취합한다.
 
 ## 5. 병렬 진행 방식
 
