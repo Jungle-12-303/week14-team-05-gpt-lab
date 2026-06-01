@@ -108,8 +108,27 @@ class ReviewSentimentDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        """TODO: text를 encode하고 max_length까지 자르거나 padding한 뒤 label과 함께 반환합니다."""
-        raise NotImplementedError("ReviewSentimentDataset.__getitem__을 구현하세요.")
+        """text를 encode하고 max_length까지 자르거나 padding한 뒤 label과 함께 반환합니다."""
+        # data의 한 샘플은 {"text": 리뷰 문자열, "label": 0 또는 1} 형태입니다.
+        sample = self.data[idx]
+        text = sample["text"]
+        label = int(sample["label"])
+
+        # 분류에서는 문장 전체의 시작/끝을 알려주기 위해 BOS/EOS 토큰을 함께 붙입니다.
+        token_ids = self.tokenizer.encode(text, add_bos_eos=True)
+
+        # 모델 입력 길이를 넘는 리뷰는 max_length까지만 사용합니다.
+        token_ids = token_ids[: self.max_length]
+
+        # DataLoader가 여러 샘플을 하나의 배치로 묶을 수 있도록 길이를 고정합니다.
+        padding_length = self.max_length - len(token_ids)
+        if padding_length > 0:
+            token_ids = token_ids + [self.pad_id] * padding_length
+
+        # PyTorch 모델 입력으로 바로 사용할 수 있게 정수 Tensor로 변환합니다.
+        input_ids = torch.tensor(token_ids, dtype=torch.long)
+
+        return input_ids, label
 
 
 class GPTForSequenceClassification(nn.Module):
