@@ -3,7 +3,9 @@
 
 import matplotlib.pyplot as plt
 import torch
+import torch.nn.functional as F  # GPTModel에서 F.cross_entropy를 가져옴
 
+# 패키지로 import될 때와 파일 단독 실행 때 모두 GPTModel을 찾기 위한 import 처리.
 try:
     from .model import GPTModel
 except ImportError:
@@ -16,55 +18,72 @@ def calc_loss_batch(
     model: GPTModel,
     device: torch.device,
 ) -> torch.Tensor:
-    """한 배치를 device로 옮긴 뒤 다음 토큰 예측 cross entropy loss를 계산합니다."""
-    input_batch = input_batch.to(device)
-    target_batch = target_batch.to(device)
-    # PyTorch의 nn.Module은 객체를 함수처럼 호출하면 내부적으로 forward()를 호출하도록 만들어져 있고, 
-    # forward() 함수에서 cross entropy loss 자동 계산
-    loss, logits = model(input_batch, targets=target_batch)
+    """한 배치를 device로 옮긴 뒤 다음 토큰 예측 cross entropy loss 계산."""
+
+    # input과 target을 모델이 계산하는 장치와 같은 device로 이동.
+    input_batch = input_batch.to(device)  # tensor데이터 -> cpu / gpu 계산 input/target을 하나의 장치로 맞춘다.
+    target_batch = target_batch.to(device)  
+
+    # 모델에 input을 넣어 각 위치별 다음 토큰 후보 점수(logits) 계산.
+    logits = model(input_batch)            # (B,T) -> (B,T,V) 다음 토큰 후보 점수표 "logits 생성"
+
+    # cross_entropy가 받을 수 있도록 batch와 sequence 차원을 하나로 펼침.
+    logits_flat = logits.reshape(
+        -1, logits.size(-1)
+    )  # (B, T, vocab_size) -> (B*T, vocab_size)
+    target_flat = target_batch.reshape(
+        -1
+    )  # -1은 pytorch한테 차원 변경 맡김 -> 1차원으로 펼친다.
+
+    # 펼친 예측 점수와 정답 토큰 ID를 비교해 평균 loss 계산.
+    loss = F.cross_entropy(
+        logits_flat, target_flat
+    )  # cross_entropy(input:예측 점수 , targets: 정답 번호)
+
     return loss
 
 
-# 배치 손실을 누적해 데이터로더 평균 손실 계산
 def calc_loss_loader(
     data_loader,
     model: GPTModel,
     device: torch.device,
     num_batches: int | None = None,
-) -> float:
-    """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용합니다."""
+) -> float:  # float: 평균 loss
+    """data_loader의 여러 배치 loss 평균 반환."""
+    # 배치가 하나도 없으면 평균을 낼 수 없으므로 NaN 반환.
+    if len(data_loader) == 0:
+        return float("nan")
 
-    was_training = model.training  # 호출 전 모델 모드 저장
-    model.eval()  # 평가 모드로 전환
+    # loss 측정 중 dropout 같은 학습용 동작을 끄기 위해 현재 모드 저장.
+    was_training = model.training
+    model.eval()
 
-    try:
-        total_loss = 0.0  # 손실 합산
+    # 여러 배치의 loss 합과 실제 계산한 배치 수를 따로 누적.
+    total_loss = 0.0
+    batches_seen = 0
 
-        # 배치 길이 검증
-        if len(data_loader) == 0:
-            return float("nan")  # not a number: 정상적인 숫자로 표현할 수 없는 값
-        elif num_batches is None:
-            # num_batches가 지정되지 않으면 모든 배치를 순회
-            num_batches = len(data_loader)
-        else:
-            # num_batches가 데이터 로더에 있는 배치 개수보다 크면 배치 횟수를 데이터 로더에 있는 총 배치 개수로 맞춘다.
-            num_batches = min(num_batches, len(data_loader))
-        
-        if num_batches is not None and num_batches <= 0:
-            raise ValueError("num_batches must be positive")
+    # 평가/검증 단계에서는 gradient가 필요 없으므로 메모리와 연산 절약.
+    with torch.no_grad():
+        for batch_idx, (input_batch, target_batch) in enumerate(data_loader):
+            # num_batches가 있으면 앞에서부터 지정한 개수만 평가.
+            if num_batches is not None and batch_idx >= num_batches:
+                break
 
-        with torch.no_grad():
-            for i, (input_batch, target_batch) in enumerate(data_loader):
-                if i < num_batches:
-                    loss = calc_loss_batch(input_batch, target_batch, model, device)
-                    total_loss += loss.item()  # 각 배치의 손실을 합산
-                else:
-                    break
-        return total_loss / num_batches
+            # 한 배치 loss를 구한 뒤 Python 숫자로 바꿔 합산.
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item()
+            batches_seen += 1
 
-    finally:
-        if was_training:
-            model.train()  # 호출 전 train 모드였으면 학습 모드로 복구
+    # 평가 전에 train 모드였던 모델은 다시 train 모드로 복구.
+    if was_training:
+        model.train()
+
+    if batches_seen == 0:
+        return float("nan")
+
+    # 누적 loss를 실제 계산한 배치 수로 나눠 평균 반환.
+    return total_loss / batches_seen
+
 
 def save_checkpoint(
     model: GPTModel,
@@ -73,14 +92,17 @@ def save_checkpoint(
     global_step: int,
     path: str,
 ) -> None:
-    """model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
-
+    """model/optimizer 상태와 학습 위치를 파일로 저장."""
+    # 체크포인트는 "가중치"뿐 아니라 이어서 학습할 위치도 함께 저장.
+    # state_dict는 모델/옵티마이저 내부 상태를 재현 가능한 딕셔너리로 만든 값.
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "epoch": epoch,
         "global_step": global_step,
     }
+
+    # checkpoint 딕셔너리를 path 위치에 PyTorch 형식으로 저장.
     torch.save(checkpoint, path)
 
 
@@ -90,23 +112,19 @@ def load_checkpoint(
     path: str,
     device: torch.device,
 ) -> tuple[int, int]:
-    """ torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
-    
-    # 저장 당시 device와 현재 실행 device가 다를 수 있으므로 현재 device에 맞춰 로드한다.
+    """checkpoint를 읽어 model/optimizer 상태 복원 후 epoch, step 반환."""
+    # map_location으로 저장 당시 GPU/CPU와 달라도 현재 device에서 읽기 가능.
     checkpoint = torch.load(path, map_location=device)
 
-    # checkpoint에서 모델 가중치만 꺼내 현재 model 인스턴스에 복원한다.
+    # 저장된 모델 파라미터를 현재 model 객체에 주입.
     model.load_state_dict(checkpoint["model_state_dict"])
 
-    # 이어서 학습할 경우 optimizer 내부 상태도 복원한다.
-    if optimizer is not None:
+    # 이어서 학습할 때만 optimizer의 momentum 등 내부 상태도 복원.
+    if optimizer is not None and "optimizer_state_dict" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    
-    # 학습을 중단한 위치부터 재개할 수 있도록 위치 정보를 반환한다.
-    epoch = checkpoint["epoch"]
-    global_step = checkpoint["global_step"]
-    
-    return epoch, global_step
+
+    # 학습 재개 위치를 호출자에게 반환.
+    return checkpoint["epoch"], checkpoint["global_step"]
 
 
 def generate(
@@ -118,48 +136,51 @@ def generate(
     top_k: int | None = None,
     eos_id: int | None = None,
 ) -> torch.Tensor:
-    """temperature와 top-k 샘플링을 지원하는 생성 함수입니다."""
+    """temperature와 top-k 샘플링을 지원해 토큰 이어 생성."""
+    # 생성 중에는 dropout을 끄되, 끝나면 원래 train/eval 모드로 복구하기 위해 저장.
+    was_training = model.training
+    model.eval()
 
+    # 새 토큰을 max_new_tokens개까지 한 번에 하나씩 생성.
     for _ in range(max_new_tokens):
-        # 모델이 처리할 수 있는 최대 context 길이에 맞춰 최근 토큰만 사용
+        # GPT는 context_size보다 긴 입력을 한 번에 보지 못하므로 최근 토큰만 유지.
         idx_cond = idx[:, -context_size:]
 
-        # 생성 단계에서는 학습하지 않으므로 gradient 계산을 기록하지 않는다.
+        # 생성은 학습이 아니므로 gradient 기록 없이 다음 토큰 점수만 계산.
         with torch.no_grad():
             logits = model(idx_cond)
 
-        # 마지막 위치의 logits가 현재 문맥 다음 토큰의 분포를 나타낸다.
+        # 마지막 위치의 logits만 "다음 토큰" 선택에 사용.
         logits = logits[:, -1, :]
 
-        # top-k 밖의 토큰은 softmax 후 확률이 0이 되도록 -inf로 마스킹한다.
+        # top_k가 있으면 확률 후보를 점수가 높은 k개 토큰으로 제한.
         if top_k is not None:
-            if top_k <= 0:
-                raise ValueError("top_k must be positive")
-            else:
-                top_k = min(top_k, logits.size(-1))  # 너무 큰 top-k 값은 가용한 최대값으로 자동 보정
+            # top-k 밖의 후보는 -inf로 지워 softmax 확률을 0으로 처리.
+            top_k = min(top_k, logits.size(-1))
             top_logits, _ = torch.topk(logits, top_k)
-            min_val = top_logits[:, -1, None]  # shape를 (B, 1)로 유지하기 위해 새로운 차원 하나 추가
-            negative_inf = torch.tensor(float("-inf"), device=logits.device, dtype=logits.dtype)
-            logits = torch.where(logits < min_val, negative_inf, logits)  # torch.where(cond, A, B)는 cond의 True/False 여부에 따라 A/B 적용
-        
-        # temperature가 0 이하이면 확률 샘플링 대신 greedy 선택을 사용
-        if temperature <= 0:
+            kth_best = top_logits[:, -1].unsqueeze(-1)
+            logits = logits.masked_fill(logits < kth_best, float("-inf"))
+
+        # temperature 0은 greedy, 그 외에는 확률 분포에서 샘플링.
+        if temperature == 0.0:
+            # temperature 0은 가장 큰 logit만 고르는 greedy decoding으로 처리.
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)
         else:
+            # temperature가 낮을수록 날카로운 분포, 높을수록 다양한 분포.
             logits = logits / temperature
             probs = torch.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
-        
-        # 단일 prompt 기준: EOS가 생성되면 반복을 중단
-        # (참고) idx_next는 tensor라서 batch size가 커지면 바로 if에 쓰기 어렵다.
-        if eos_id is not None:
-            if idx_next.numel() != 1:  # batch size 1만 지원
-                raise ValueError("eos_id early stopping only supports batch size 1")
-            if idx_next.item() == eos_id:
-                break
 
         idx = torch.cat((idx, idx_next), dim=1)
 
+        # 배치의 모든 샘플이 EOS를 만들면 생성 중단.
+        if eos_id is not None and torch.all(idx_next == eos_id):
+            break
+
+    if was_training:
+        model.train()
+
+    # 원래 입력 토큰과 새로 생성한 토큰이 이어진 전체 시퀀스 반환.
     return idx
 
 
@@ -173,44 +194,28 @@ def generate_and_print_sample(
     temperature: float = 0.8,
     top_k: int | None = 40,
 ) -> None:
-    """start_context를 encode하고 generate 후 decode하여 출력합니다."""
+    """start_context를 토큰화한 뒤 생성 결과를 문자열로 출력."""
+    # 샘플 생성은 평가 동작이므로 dropout을 끈 상태로 실행.
+    model.eval()
 
-    model.eval()  # PyTorch 모델을 평가 모드로 전환(Dropout 미적용)
+    # tokenizer.encode는 문자열을 토큰 ID 리스트로 변환.
+    encoded = tokenizer.encode(start_context)
 
-    # tokenizer 출력은 list[int]이므로 모델 입력 형태인 (1, T) LongTensor로 변환
-    input_token_ids = tokenizer.encode(start_context)
-    input_tensor = torch.tensor(input_token_ids, dtype=torch.long).unsqueeze(0).to(device)
+    # 모델 입력 형식인 (batch_size=1, seq_len) LongTensor로 변환.
+    idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
 
-    output_tensor = generate(
+    # 시작 토큰 뒤에 새 토큰을 생성.
+    token_ids = generate(
         model=model,
-        idx=input_tensor,
+        idx=idx,
         max_new_tokens=max_new_tokens,
         context_size=context_size,
         temperature=temperature,
         top_k=top_k,
     )
 
-    # batch 차원을 제거한 뒤 decode가 받을 수 있는 token id list로 변환
-    output_token_ids = output_tensor.squeeze(0).tolist()
-    output_text = tokenizer.decode(output_token_ids)
-    
-    print(output_text)
-
-
-# [헬퍼 함수] train_model 내부에서 사용할 모델 평가용 함수
-def evaluate_model(
-    model: GPTModel,
-    train_loader,
-    val_loader,
-    device: torch.device,
-    eval_iter: int,
-) -> tuple[float, float]:
-    """train/validation loader의 평균 loss를 평가합니다."""
-
-    train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
-    val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
-
-    return train_loss, val_loss
+    # decode는 토큰 ID 리스트를 다시 사람이 읽는 문자열로 변환.
+    print(tokenizer.decode(token_ids.squeeze(0).tolist()))
 
 
 def train_model(
@@ -220,7 +225,7 @@ def train_model(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_epochs: int,
-    eval_freq: int | None, 
+    eval_freq: int,
     eval_iter: int,
     start_context: str,
     tokenizer,
@@ -228,83 +233,79 @@ def train_model(
     start_epoch: int = 0,
     global_step: int = 0,
 ) -> list[float]:
-    """사전 학습 루프를 구현하고 epoch별 train loss 리스트를 반환합니다."""
+    """사전 학습 루프 실행 후 epoch별 평균 train loss 반환."""
+    # epoch가 끝날 때마다 평균 train loss를 저장할 리스트.
+    train_losses: list[float] = []
 
-    train_losses = []  # epoch별 평균 train loss를 저장할 리스트 (최종 반환값)
+    # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
+    model.to(device)
 
-    model.to(device)  # 모델 파라미터를 CPU/GPU 같은 지정된 device로 이동
-    model.train()  # 학습 모드로 전환
+    # start_epoch부터 지정한 epoch 수만큼 학습 반복.
+    for epoch in range(start_epoch, start_epoch + num_epochs):
+        # 학습 단계에서는 dropout 등 학습용 동작을 켠 상태로 설정.
+        model.train()
 
-    # epoch 반복
-    for epoch in range(start_epoch, num_epochs):
-        epoch_loss = 0.0  # 현재 epoch의 batch loss 합계
-        num_batches = 0  # batch 개수
+        # 현재 epoch의 loss 합과 배치 수 초기화.
+        epoch_loss = 0.0
+        batches_seen = 0
 
-        # 훈련 데이터로부터 input/target batch 하나씩 가져오기
+        # train_loader에서 input/target 배치를 하나씩 꺼내 학습.
         for input_batch, target_batch in train_loader:
-            # 이전 batch에서 계산된 gradient 초기화
-            # PyTorch는 gradient를 누적하므로 매 batch마다 필요
+            # 이전 배치에서 누적된 gradient 초기화.
             optimizer.zero_grad()
 
-            # 현재 batch를 모델에 넣고 cross entropy loss 계산
+            # 현재 배치의 다음 토큰 예측 loss 계산.
             loss = calc_loss_batch(input_batch, target_batch, model, device)
 
-            loss.backward()  # loss를 기준으로 각 파라미터의 gradient 계산
-            optimizer.step()  # 계산된 gradient로 실제 모델 파라미터 업데이트
-            epoch_loss += loss.item()  # 현재 batch loss 값을 epoch loss 합계에 추가
-            num_batches += 1  # 현재 epoch 안의 batch 수 증가
-            global_step += 1  # 전체 학습 step 수 증가
+            # loss에서 각 파라미터가 얼마나 바뀌어야 하는지 gradient 계산.
+            loss.backward()
+            # optimizer가 gradient를 사용해 실제 모델 파라미터를 한 걸음 업데이트.
+            optimizer.step()
 
-            # step마다 train/validation loss 평가
-            if eval_freq is not None:
-                if eval_freq <= 0:
-                    raise ValueError("eval_freq must be positive")
-                if global_step % eval_freq == 0:
-                    train_loss, val_loss = evaluate_model(
-                        model, train_loader, val_loader, device, eval_iter
-                    )
+            epoch_loss += loss.item()
+            batches_seen += 1
+            global_step += 1
 
-                    # 현재 epoch, global step, train loss, validation loss 출력
-                    print(
-                        f"Ep {epoch + 1}, Step {global_step}: "
-                        f"train loss {train_loss:.3f}, val loss {val_loss:.3f}"
-                    )
-        
-        if num_batches is not None and num_batches <= 0:
-            raise ValueError("num_batches must be positive")
-
-        # 한 epoch 동안의 평균 train loss를 계산해서 기록
-        avg_epoch_loss = epoch_loss / num_batches
-        train_losses.append(avg_epoch_loss)
-
-        # 현재 모델로 샘플 텍스트를 생성해 출력
-        generate_and_print_sample(
-            model=model,
-            tokenizer=tokenizer,
-            device=device,
-            start_context=start_context,
-            context_size=model.config["context_length"],
-        )
-        model.train()  # 학습 모드로 다시 전환
-
-        # ckpt_freq가 설정되어 있으면 지정한 epoch 간격마다 checkpoint를 저장
-        if ckpt_freq is not None:
-            if ckpt_freq <= 0:
-                raise ValueError("ckpt_freq must be positive")
-            if ckpt_freq > 0 and (epoch + 1) % ckpt_freq == 0:
-                # 모델 상태, optimizer 상태, 현재 epoch, global step을 파일로 저장
-                save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    epoch=epoch + 1,
-                    global_step=global_step,
-                    path=f"checkpoint_epoch_{epoch + 1}.pt",
+            # eval_freq마다 train/validation loss를 일부 배치 기준으로 점검.
+            if eval_freq > 0 and global_step % eval_freq == 0:
+                train_loss = calc_loss_loader(train_loader, model, device, eval_iter)
+                val_loss = calc_loss_loader(val_loader, model, device, eval_iter)
+                print(
+                    f"step {global_step}: train loss {train_loss:.4f}, "
+                    f"val loss {val_loss:.4f}"
                 )
 
+            # ckpt_freq마다 현재 모델과 optimizer 상태를 checkpoint 파일로 저장.
+            if ckpt_freq is not None and ckpt_freq > 0 and global_step % ckpt_freq == 0:
+                save_checkpoint(
+                    model,
+                    optimizer,
+                    epoch=epoch,
+                    global_step=global_step,
+                    path=f"checkpoint_step_{global_step}.pt",
+                )
+
+        # epoch 하나가 끝난 뒤 평균 loss를 계산해 기록.
+        avg_epoch_loss = epoch_loss / batches_seen if batches_seen > 0 else float("nan")
+        train_losses.append(avg_epoch_loss)
+
+        # tokenizer와 시작 문장이 있으면 현재 모델의 샘플 생성 결과 확인.
+        if tokenizer is not None and start_context:
+            generate_and_print_sample(
+                model,
+                tokenizer,
+                device,
+                start_context,
+                context_size=getattr(model, "config", {}).get("context_length", 256),
+            )
+
+    # epoch별 평균 train loss 목록 반환.
     return train_losses
 
 
-def plot_losses(train_losses: list[float], val_losses: list[float] | None = None) -> None:
+def plot_losses(
+    train_losses: list[float], val_losses: list[float] | None = None
+) -> None:
     """훈련/검증 손실 그래프를 그리는 제공 함수."""
     plt.plot(train_losses, label="Train")
     if val_losses is not None:
