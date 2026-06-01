@@ -280,7 +280,7 @@ def train_model(
                 save_checkpoint(
                     model,
                     optimizer,
-                    epoch=epoch,
+                    epoch=epoch + 1,
                     global_step=global_step,
                     path=f"checkpoint_step_{global_step}.pt",
                 )

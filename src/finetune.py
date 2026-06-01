@@ -137,6 +137,7 @@ class GPTForSequenceClassification(nn.Module):
         super().__init__()
         self.gpt = gpt_model
         self.num_labels = num_labels
+        self.pad_id = 0
         # dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
         self.dropout = nn.Dropout(drop_rate)
         self.classifier = nn.Linear(gpt_model.config["emb_dim"], num_labels)
@@ -160,8 +161,11 @@ class GPTForSequenceClassification(nn.Module):
 
         # 마지막 정규화까지 적용해 분류에 사용할 최종 hidden state를 얻습니다.
         hidden_states = self.gpt.final_layernorm(hidden_states)
-        # 마지막 토큰 위치의 벡터를 문장 대표 표현으로 사용합니다.
-        pooled = hidden_states[:, -1, :]
+        # 각 샘플에서 마지막 비패딩 토큰 위치를 찾아 그 벡터를 대표 표현으로 사용합니다.
+        non_pad_mask = input_ids != self.pad_id
+        last_indices = non_pad_mask.sum(dim=1).clamp(min=1) - 1
+        batch_indices = torch.arange(hidden_states.size(0), device=hidden_states.device)
+        pooled = hidden_states[batch_indices, last_indices]
         # 분류 직전에 dropout을 적용해 과적합을 줄입니다.
         pooled = self.dropout(pooled)
         # 문장 표현을 각 라벨의 점수(logits)로 변환합니다.
