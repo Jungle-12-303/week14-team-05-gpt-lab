@@ -195,8 +195,46 @@ def train_epoch_sentiment(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("train_epoch_sentiment를 구현하세요.")
+    """감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다."""
+    # dropout과 gradient 계산이 켜지도록 모델을 학습 모드로 전환합니다.
+    model.train()
+
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
+    for input_ids, labels in train_loader:
+        # 배치 데이터를 모델과 같은 CPU/GPU 장치로 옮깁니다.
+        input_ids = input_ids.to(device)
+        labels = labels.to(device)
+
+        # 이전 배치에서 계산된 gradient가 누적되지 않도록 초기화합니다.
+        optimizer.zero_grad()
+
+        # labels를 함께 넘기면 모델이 cross entropy loss와 logits를 같이 반환합니다.
+        loss, logits = model(input_ids, labels=labels)
+
+        # loss를 기준으로 gradient를 계산하고 optimizer로 파라미터를 업데이트합니다.
+        loss.backward()
+        optimizer.step()
+
+        batch_size = labels.size(0)
+        # 배치 평균 loss에 배치 크기를 곱해 샘플 수 기준 평균을 낼 수 있게 누적합니다.
+        total_loss += loss.item() * batch_size
+
+        # 가장 큰 logit을 가진 class를 예측값으로 보고 정답 개수를 셉니다.
+        predictions = torch.argmax(logits, dim=-1)
+        total_correct += (predictions == labels).sum().item()
+        total_examples += batch_size
+
+    # 비어 있는 loader가 들어오면 0으로 나누지 않고 NaN을 반환합니다.
+    if total_examples == 0:
+        return float("nan"), float("nan")
+
+    avg_loss = total_loss / total_examples
+    accuracy = total_correct / total_examples
+
+    return avg_loss, accuracy
 
 
 def evaluate_sentiment(
