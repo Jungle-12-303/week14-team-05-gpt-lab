@@ -91,11 +91,21 @@ class ReviewSentimentDataset(Dataset):
         self.pad_id = tokenizer.get_pad_id() if pad_id is None else pad_id
 
     def __len__(self) -> int:
+        # Dataset 전체 샘플 수를 DataLoader가 알 수 있게 반환.
         return len(self.data)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        """TODO: text를 encode하고 max_length까지 자르거나 padding한 뒤 label과 함께 반환합니다."""
-        raise NotImplementedError("ReviewSentimentDataset.__getitem__을 구현하세요.")
+        """text를 encode하고 max_length까지 자르거나 padding한 뒤 label과 함께 반환."""
+        # 리뷰 문자열을 토큰 ID로 바꾼 뒤 모델 입력 길이에 맞게 자르거나 padding.
+        item = self.data[idx]
+        token_ids = self.tokenizer.encode(item["text"], add_bos_eos=True)
+        token_ids = token_ids[: self.max_length]
+
+        if len(token_ids) < self.max_length:
+            token_ids = token_ids + [self.pad_id] * (self.max_length - len(token_ids))
+
+        input_ids = torch.tensor(token_ids, dtype=torch.long)
+        return input_ids, int(item["label"])
 
 
 class GPTForSequenceClassification(nn.Module):
