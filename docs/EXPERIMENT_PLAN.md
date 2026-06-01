@@ -275,27 +275,34 @@ D는 최종 단계에서 A/B/C가 제출한 best pretrain checkpoint를 사용�
 
 ### 8.3 구체 일정
 
-| 날짜 | 시간 | 목표 | 산출물 |
-| --- | --- | --- | --- |
-| 2026-06-02 화 | 10:00~10:30 | kickoff, baseline 기준 확정, 실험 로그 양식 확정 | 공통 config, 실험 ID, 담당자별 첫 실행 목록 |
-| 2026-06-02 화 | 10:30~11:50 | smoke test 실행, Colab GPU/데이터 경로 확인 | 각자 코드 실행 가능 여부, 실패 환경 기록 |
-| 2026-06-02 화 | 11:50~13:00 | 점심시간 | 실행 중인 Colab만 유지 |
-| 2026-06-02 화 | 13:00~15:00 | baseline 집중 실행 | A0 pretrain baseline, D0 sentiment baseline |
-| 2026-06-02 화 | 15:00~17:30 | 1차 screening 병렬 실행 | A1/A2 중 1개 이상, B2, C1 또는 C2, D1/D4 초안 |
-| 2026-06-02 화 | 17:30~17:50 | 중간 결과 저장, 실패 실험 정리 | baseline 대비 1차 결과표, OOM/NaN 로그 |
-| 2026-06-02 화 | 17:50~19:00 | 저녁시간 | 실행 중인 Colab만 유지 |
-| 2026-06-02 화 | 19:00~20:30 | 남은 1차 screening 실행 | B1/B3/C3/A3 중 가능한 선택 실험 |
-| 2026-06-02 화 | 20:30~21:00 | 1차 결과 리뷰, 최종 후보 확정 | 버릴 후보, 유지할 후보, 6/3 확인 실험 2~3개 |
-| 2026-06-02 화 | 21:00~22:30 | 최종 후보 재실험 시작 | best hparam 후보, best architecture 후보 로그 |
-| 2026-06-02 화 | 22:30 이후 | 긴 confirmation 실험 자동 실행 | checkpoint 저장 설정된 overnight 실험 |
-| 2026-06-03 수 | 10:00~10:30 | overnight 결과 확인, 실패 실험 판정 | 성공/실패 로그, 최종 재실행 필요 여부 |
-| 2026-06-03 수 | 10:30~11:50 | 최종 confirmation 및 sentiment test 평가 | best pretrain 후보, best sentiment 후보 |
-| 2026-06-03 수 | 11:50~13:00 | 점심시간 | 실행 중인 Colab만 유지 |
-| 2026-06-03 수 | 13:00~13:40 | 최종 checkpoint 선정, 누락 지표 보완 | best pretrain checkpoint, best sentiment checkpoint |
-| 2026-06-03 수 | 13:40~14:20 | 그래프 생성, 결과표 작성 | loss curve, hparam 결과표, sentiment 결과표 |
-| 2026-06-03 수 | 14:20~14:40 | `REPORT.md`와 발표 자료에 결과 반영 | 최종 수치, 실패 실험 요약, 발표 목차 |
-| 2026-06-03 수 | 14:40~15:00 | 최종 결과 freeze, 발표 핵심 메시지 확정 | 최종 결론 3개, 예상 질문 답변 초안 |
-| 2026-06-04 목 | 10:00 | 발표 | 최종 발표 |
+이 일정에서는 실제 이름을 우선 표기하고, 괄호 안에 실험 ID 접두어를 함께 적는다.
+
+- 재환(A): 사전 학습 안정화 실험
+- 영빈(B): 학습 하이퍼파라미터 실험
+- 범상(C): 모델 구조 하이퍼파라미터 실험
+- 형민(D): 감성 분류 개선 실험 및 최종 리포트 취합
+
+| 날짜 | 시간 | 재환(A) | 영빈(B) | 범상(C) | 형민(D) | 산출물/결정 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-06-02 화 | 10:00~10:30 | A0 기준 config와 안정화 실험 순서 확정 | B1/B2/B3 후보와 고정 변수 확정 | C1/C2/C3 후보와 모델 크기 제한 확정 | D0~D4 실행 순서와 리포트 취합 방식 확정 | 공통 config, 실험 ID, 담당자별 첫 실행 목록 |
+| 2026-06-02 화 | 10:30~11:50 | A0 smoke test, checkpoint 저장 확인 | B 실험용 학습 스크립트 smoke test | C 실험용 모델 설정 smoke test | D0 sentiment smoke test, label 경로 확인 | Colab GPU/데이터 경로, 코드 실행 가능 여부, 실패 환경 기록 |
+| 2026-06-02 화 | 11:50~13:00 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 점심시간 |
+| 2026-06-02 화 | 13:00~15:00 | A0 pretrain baseline 실행 및 train/val loss 기록 | A0와 같은 기준으로 B2 learning_rate 준비 | A0와 같은 기준으로 C1/C2 준비 | D0 sentiment baseline 실행 및 val/test 기준 확인 | baseline 결과 확보 |
+| 2026-06-02 화 | 15:00~17:30 | A1 warmup+cosine 또는 A2 clipping 중 1개 이상 실행 | B2 learning_rate 3개 후보 병렬 비교 | C1 context_length 또는 C2 n_layers 비교 | D1 class imbalance 확인, D4 best checkpoint 선택 로직 확인 | 1차 screening 결과표 초안 |
+| 2026-06-02 화 | 17:30~17:50 | A0 대비 A1/A2 결과 정리 | B2 결과에서 유지/탈락 후보 표시 | C1/C2 결과에서 유지/탈락 후보 표시 | D0/D1/D4 결과와 실패 로그 정리 | baseline 대비 1차 결과표, OOM/NaN 로그 |
+| 2026-06-02 화 | 17:50~19:00 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 저녁시간 |
+| 2026-06-02 화 | 19:00~20:30 | 가능하면 A3 weight_decay 또는 A4 combined 초안 실행 | 시간이 되면 B1 batch_size 또는 B3 drop_rate 추가 실행 | 시간이 되면 C3 emb_dim 추가 실행 | D2 freeze 또는 D3 lr 분리 중 가능한 실험 실행 | 선택 실험 결과와 실패 로그 |
+| 2026-06-02 화 | 20:30~21:00 | 유지할 안정화 기법 1개 선정 | best learning_rate 후보 선정 | best context/model 후보 선정 | fine-tuning 유지 후보와 최종 평가 방식 선정 | 버릴 후보, 유지할 후보, 6/3 확인 실험 2~3개 |
+| 2026-06-02 화 | 21:00~22:30 | 선정한 안정화 설정으로 재실험 시작 | best hparam 후보 재실험 시작 | best architecture 후보 재실험 시작 | 현재 best checkpoint 기준 fine-tuning 재실험 시작 | 최종 후보 재실험 로그 |
+| 2026-06-02 화 | 22:30 이후 | checkpoint 저장된 overnight pretrain 유지 | overnight hparam confirmation 유지 | overnight architecture confirmation 유지 | overnight fine-tuning confirmation 유지 | 자동 실행 로그, checkpoint |
+| 2026-06-03 수 | 10:00~10:30 | 재환 overnight 결과 성공/실패 판정 | 영빈 overnight 결과 성공/실패 판정 | 범상 overnight 결과 성공/실패 판정 | 형민 overnight 결과 성공/실패 판정 및 누락 표 확인 | 최종 재실행 필요 여부 |
+| 2026-06-03 수 | 10:30~11:50 | 최종 pretrain 후보 loss 확인 | best hparam 후보 수치 확정 | best architecture 후보 수치 확정 | best pretrain checkpoint로 sentiment test 평가 | best pretrain 후보, best sentiment 후보 |
+| 2026-06-03 수 | 11:50~13:00 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 실행 중인 Colab만 유지 | 점심시간 |
+| 2026-06-03 수 | 13:00~13:40 | 재환 결과 문서에 최종 checkpoint와 결론 반영 | 영빈 결과 문서에 최종 hparam 결론 반영 | 범상 결과 문서에 최종 model/context 결론 반영 | 형민 결과 문서와 취합 표에 sentiment 결론 반영 | best checkpoint, 누락 지표 보완 |
+| 2026-06-03 수 | 13:40~14:20 | 재환 loss curve 생성 | 영빈 hparam 결과표와 그래프 생성 | 범상 architecture 결과표와 그래프 생성 | 형민 sentiment 결과표와 전체 그래프 취합 | loss curve, hparam 결과표, sentiment 결과표 |
+| 2026-06-03 수 | 14:20~14:40 | 재환 최종 수치 `REPORT.md` 반영 | 영빈 최종 수치 `REPORT.md` 반영 | 범상 최종 수치 `REPORT.md` 반영 | 형민이 `REPORT.md`와 발표 자료 전체 취합 | 최종 수치, 실패 실험 요약, 발표 목차 |
+| 2026-06-03 수 | 14:40~15:00 | 재환 결론 1개와 예상 질문 작성 | 영빈 결론 1개와 예상 질문 작성 | 범상 결론 1개와 예상 질문 작성 | 형민 최종 결론 3개와 예상 질문 답변 정리 | 최종 결과 freeze, 발표 핵심 메시지 |
+| 2026-06-04 목 | 10:00 | 사전 학습 안정화 결과 발표 보조 | 하이퍼파라미터 결과 발표 보조 | 모델 구조 결과 발표 보조 | 최종 리포트와 감성 분류 결과 발표 | 최종 발표 |
 
 회의는 길게 토론하지 않고 다음 3가지만 결정한다.
 
