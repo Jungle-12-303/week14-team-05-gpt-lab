@@ -137,10 +137,12 @@ class GPTForSequenceClassification(nn.Module):
         drop_rate: float = 0.1,
     ):
         super().__init__()
-        self.gpt = gpt_model
-        self.num_labels = num_labels
-        # TODO: dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
-        raise NotImplementedError("GPTForSequenceClassification.__init__을 구현하세요.")
+        self.gpt = gpt_model  # 기존 GPT backbone 저장
+        self.num_labels = num_labels  # 분류 클래스 개수 저장(NSMC는 긍정/부정 예측이라 2)
+        # dropout과 classifier를 정의. classifier 입력 차원은 gpt_model.config["emb_dim"]
+        emb_dim = gpt_model.config["emb_dim"]
+        self.dropout = nn.Dropout(drop_rate)
+        self.classifier = nn.Linear(emb_dim, num_labels)  # 문장 대표 벡터를 num_labels개의 logits로 변환하는 Linear layer
 
     def forward(
         self,
@@ -148,11 +150,37 @@ class GPTForSequenceClassification(nn.Module):
         labels: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
+        GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
 
         labels가 있으면 (loss, logits), 없으면 logits를 반환합니다.
         """
-        raise NotImplementedError("GPTForSequenceClassification.forward를 구현하세요.")
+        # GPTModel.forward()는 LM head까지 통과하므로, 분류에서는 hidden state를 직접 만든다.
+        x = self.gpt.embedding(input_ids)
+        
+        # TransformerBlock을 통과해 각 token 위치의 문맥 표현을 만든다.    
+        for block in self.gpt.blocks:
+            x = block(x)
+
+        # GPT의 마지막 LayerNorm까지 적용한 hidden state를 사용한다.
+        x = self.gpt.final_layernorm(x)
+
+        # 오른쪽 padding이 있는 경우 마지막 실제 token이 아니라 pad 위치일 수 있다.
+        pooled = x[:, -1, :]  # 단순 구현에서는 sequence의 마지막 위치를 문장 대표 벡터로 사용
+        
+        # 분류 head에 넣기 전에 dropout으로 과적합을 줄인다.
+        pooled = self.dropout(pooled)
+
+        # 문장 대표 벡터를 num_labels개의 class logits로 변환
+        logits = self.classifier(pooled)
+
+        # labels가 주어지면 학습/평가용 loss까지 함께 반환
+        if labels is not None:
+            labels = labels.long()
+            loss = nn.functional.cross_entropy(logits, labels)
+            return loss, logits
+
+        # 추론 시에는 logits만 반환
+        return logits
 
 
 def train_epoch_sentiment(
