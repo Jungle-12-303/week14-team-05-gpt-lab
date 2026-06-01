@@ -135,10 +135,12 @@ class GPTForSequenceClassification(nn.Module):
         gpt_model: GPTModel,
         num_labels: int = 2,
         drop_rate: float = 0.1,
+        pad_id: int = 0,
     ):
         super().__init__()
         self.gpt = gpt_model  # 기존 GPT backbone 저장
         self.num_labels = num_labels  # 분류 클래스 개수 저장(NSMC는 긍정/부정 예측이라 2)
+        self.pad_id = pad_id
         emb_dim = gpt_model.config["emb_dim"]
         
         # GPT hidden state를 분류 label 개수만큼의 logits로 변환
@@ -165,9 +167,12 @@ class GPTForSequenceClassification(nn.Module):
         # GPT의 마지막 LayerNorm까지 적용한 hidden state를 사용
         x = self.gpt.final_layernorm(x)
 
-        # 고정 길이 sequence의 마지막 위치 hidden state를 문장 대표 벡터로 사용한다.
-        # 오른쪽 padding 입력에서는 마지막 위치가 pad일 수 있지만, causal attention으로 앞선 token 문맥을 반영한다.
-        pooled = x[:, -1, :]
+        # padding이 아닌 마지막 token 위치의 hidden state를 문장 대표 벡터로 사용한다.
+        non_pad_mask = input_ids != self.pad_id
+        positions = torch.arange(input_ids.size(1), device=input_ids.device).unsqueeze(0)
+        last_token_indices = (positions * non_pad_mask).max(dim=1).values
+        batch_indices = torch.arange(input_ids.size(0), device=input_ids.device)
+        pooled = x[batch_indices, last_token_indices]
         
         # 분류 head에 넣기 전에 dropout을 적용해 과적합 위험을 낮춘다.
         pooled = self.dropout(pooled)
