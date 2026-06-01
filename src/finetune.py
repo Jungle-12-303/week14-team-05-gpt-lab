@@ -124,8 +124,9 @@ class GPTForSequenceClassification(nn.Module):
         super().__init__()
         self.gpt = gpt_model
         self.num_labels = num_labels
-        # TODO: dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
-        raise NotImplementedError("GPTForSequenceClassification.__init__을 구현하세요.")
+        # GPT hidden state의 마지막 토큰 표현을 분류 logits로 바꾸는 head 구성.
+        self.dropout = nn.Dropout(drop_rate)
+        self.classifier = nn.Linear(gpt_model.config["emb_dim"], num_labels)
 
     def forward(
         self,
@@ -133,11 +134,26 @@ class GPTForSequenceClassification(nn.Module):
         labels: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
+        GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits 생성.
 
         labels가 있으면 (loss, logits), 없으면 logits를 반환합니다.
         """
-        raise NotImplementedError("GPTForSequenceClassification.forward를 구현하세요.")
+        # LM head를 거치기 전 hidden state를 직접 구해 문장 분류용 표현으로 사용.
+        x = self.gpt.embedding(input_ids)
+        for block in self.gpt.blocks:
+            x = block(x)
+        x = self.gpt.final_layernorm(x)
+
+        # causal GPT에서는 마지막 위치가 앞 문맥을 모두 본 대표 벡터 역할.
+        pooled = x[:, -1, :]
+        logits = self.classifier(self.dropout(pooled))
+
+        if labels is not None:
+            # 분류 문제이므로 각 샘플의 class label에 대해 cross entropy 계산.
+            loss = nn.functional.cross_entropy(logits, labels)
+            return loss, logits
+
+        return logits
 
 
 def train_epoch_sentiment(
