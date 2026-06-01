@@ -174,6 +174,9 @@ class GPTForSequenceClassification(nn.Module):
 
         # padding이 아닌 마지막 token 위치의 hidden state를 문장 대표 벡터로 사용한다.
         non_pad_mask = input_ids != self.pad_id
+        if not non_pad_mask.any(dim=1).all().item():
+            raise ValueError("input_ids must contain at least one non-padding token per example.")
+
         positions = torch.arange(input_ids.size(1), device=input_ids.device).unsqueeze(0)
         last_token_indices = (positions * non_pad_mask).max(dim=1).values
         batch_indices = torch.arange(input_ids.size(0), device=input_ids.device)
@@ -254,31 +257,32 @@ def evaluate_sentiment(
     total_correct = 0
     total_examples = 0
 
-    with torch.no_grad():
-        for input_ids, labels in data_loader:
-            # 모델과 같은 device에서 계산되도록 batch를 이동
-            input_ids = input_ids.to(device)
-            labels = labels.to(device).long()
+    try:
+        with torch.no_grad():
+            for input_ids, labels in data_loader:
+                # 모델과 같은 device에서 계산되도록 batch를 이동
+                input_ids = input_ids.to(device)
+                labels = labels.to(device).long()
 
-            # 평가에서는 parameter를 갱신하지 않고 loss와 logits만 계산
-            loss, logits = model(input_ids, labels=labels)
+                # 평가에서는 parameter를 갱신하지 않고 loss와 logits만 계산
+                loss, logits = model(input_ids, labels=labels)
 
-            # 마지막 batch 크기가 다를 수 있으므로 sample 수 기준으로 평균을 낸다.
-            batch_size = input_ids.size(0)
-            total_loss += loss.item() * batch_size
+                # 마지막 batch 크기가 다를 수 있으므로 sample 수 기준으로 평균을 낸다.
+                batch_size = input_ids.size(0)
+                total_loss += loss.item() * batch_size
 
-            # 가장 큰 logit을 예측 class로 보고 정답 개수를 누적
-            preds = logits.argmax(dim=-1)
-            total_correct += (preds == labels).sum().item()
-            total_examples += batch_size
+                # 가장 큰 logit을 예측 class로 보고 정답 개수를 누적
+                preds = logits.argmax(dim=-1)
+                total_correct += (preds == labels).sum().item()
+                total_examples += batch_size
 
-    if total_examples == 0:
-        raise ValueError("data_loader must contain at least one batch.")
+        if total_examples == 0:
+            raise ValueError("data_loader must contain at least one batch.")
 
-    avg_loss = total_loss / total_examples
-    accuracy = total_correct / total_examples
+        avg_loss = total_loss / total_examples
+        accuracy = total_correct / total_examples
 
-    if was_training:
-        model.train()
-
-    return avg_loss, accuracy
+        return avg_loss, accuracy
+    finally:
+        if was_training:
+            model.train()

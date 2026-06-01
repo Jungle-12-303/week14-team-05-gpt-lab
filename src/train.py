@@ -65,20 +65,21 @@ def calc_loss_loader(
     batches_seen = 0
 
     # 평가/검증 단계에서는 gradient가 필요 없으므로 메모리와 연산 절약.
-    with torch.no_grad():
-        for batch_idx, (input_batch, target_batch) in enumerate(data_loader):
-            # num_batches가 있으면 앞에서부터 지정한 개수만 평가.
-            if num_batches is not None and batch_idx >= num_batches:
-                break
+    try:
+        with torch.no_grad():
+            for batch_idx, (input_batch, target_batch) in enumerate(data_loader):
+                # num_batches가 있으면 앞에서부터 지정한 개수만 평가.
+                if num_batches is not None and batch_idx >= num_batches:
+                    break
 
-            # 한 배치 loss를 구한 뒤 Python 숫자로 바꿔 합산.
-            loss = calc_loss_batch(input_batch, target_batch, model, device)
-            total_loss += loss.item()
-            batches_seen += 1
-
-    # 평가 전에 train 모드였던 모델은 다시 train 모드로 복구.
-    if was_training:
-        model.train()
+                # 한 배치 loss를 구한 뒤 Python 숫자로 바꿔 합산.
+                loss = calc_loss_batch(input_batch, target_batch, model, device)
+                total_loss += loss.item()
+                batches_seen += 1
+    finally:
+        # 평가 중 예외가 발생해도 train 모드였던 모델은 다시 train 모드로 복구.
+        if was_training:
+            model.train()
 
     if batches_seen == 0:
         return float("nan")
@@ -148,47 +149,48 @@ def generate(
     was_training = model.training
     model.eval()
 
-    # 새 토큰을 max_new_tokens개까지 한 번에 하나씩 생성.
-    for _ in range(max_new_tokens):
-        # GPT는 context_size보다 긴 입력을 한 번에 보지 못하므로 최근 토큰만 유지.
-        idx_cond = idx[:, -context_size:]
+    try:
+        # 새 토큰을 max_new_tokens개까지 한 번에 하나씩 생성.
+        for _ in range(max_new_tokens):
+            # GPT는 context_size보다 긴 입력을 한 번에 보지 못하므로 최근 토큰만 유지.
+            idx_cond = idx[:, -context_size:]
 
-        # 생성은 학습이 아니므로 gradient 기록 없이 다음 토큰 점수만 계산.
-        with torch.no_grad():
-            logits = model(idx_cond)
+            # 생성은 학습이 아니므로 gradient 기록 없이 다음 토큰 점수만 계산.
+            with torch.no_grad():
+                logits = model(idx_cond)
 
-        # 마지막 위치의 logits만 "다음 토큰" 선택에 사용.
-        logits = logits[:, -1, :]
+            # 마지막 위치의 logits만 "다음 토큰" 선택에 사용.
+            logits = logits[:, -1, :]
 
-        # top_k가 있으면 확률 후보를 점수가 높은 k개 토큰으로 제한.
-        if top_k is not None:
-            # top-k 밖의 후보는 -inf로 지워 softmax 확률을 0으로 처리.
-            top_k = min(top_k, logits.size(-1))
-            top_logits, _ = torch.topk(logits, top_k)
-            kth_best = top_logits[:, -1].unsqueeze(-1)
-            logits = logits.masked_fill(logits < kth_best, float("-inf"))
+            # top_k가 있으면 확률 후보를 점수가 높은 k개 토큰으로 제한.
+            if top_k is not None:
+                # top-k 밖의 후보는 -inf로 지워 softmax 확률을 0으로 처리.
+                top_k = min(top_k, logits.size(-1))
+                top_logits, _ = torch.topk(logits, top_k)
+                kth_best = top_logits[:, -1].unsqueeze(-1)
+                logits = logits.masked_fill(logits < kth_best, float("-inf"))
 
-        # temperature 0은 greedy, 그 외에는 확률 분포에서 샘플링.
-        if temperature == 0.0:
-            # temperature 0은 가장 큰 logit만 고르는 greedy decoding으로 처리.
-            idx_next = torch.argmax(logits, dim=-1, keepdim=True)
-        else:
-            # temperature가 낮을수록 날카로운 분포, 높을수록 다양한 분포.
-            logits = logits / temperature
-            probs = torch.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
+            # temperature 0은 greedy, 그 외에는 확률 분포에서 샘플링.
+            if temperature == 0.0:
+                # temperature 0은 가장 큰 logit만 고르는 greedy decoding으로 처리.
+                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+            else:
+                # temperature가 낮을수록 날카로운 분포, 높을수록 다양한 분포.
+                logits = logits / temperature
+                probs = torch.softmax(logits, dim=-1)
+                idx_next = torch.multinomial(probs, num_samples=1)
 
-        idx = torch.cat((idx, idx_next), dim=1)
+            idx = torch.cat((idx, idx_next), dim=1)
 
-        # 배치의 모든 샘플이 EOS를 만들면 생성 중단.
-        if eos_id is not None and torch.all(idx_next == eos_id):
-            break
+            # 배치의 모든 샘플이 EOS를 만들면 생성 중단.
+            if eos_id is not None and torch.all(idx_next == eos_id):
+                break
 
-    if was_training:
-        model.train()
-
-    # 원래 입력 토큰과 새로 생성한 토큰이 이어진 전체 시퀀스 반환.
-    return idx
+        # 원래 입력 토큰과 새로 생성한 토큰이 이어진 전체 시퀀스 반환.
+        return idx
+    finally:
+        if was_training:
+            model.train()
 
 
 def generate_and_print_sample(
@@ -249,6 +251,7 @@ def train_model(
 
     num_epochs는 전체 목표 epoch 수이고, start_epoch는 다음에 시작할 epoch입니다.
     checkpoint의 epoch 값도 재개할 다음 epoch을 뜻합니다.
+    ckpt_freq는 epoch 단위 checkpoint 저장 주기입니다.
     """
     if num_epochs < start_epoch:
         raise ValueError("num_epochs must be greater than or equal to start_epoch.")
@@ -294,19 +297,19 @@ def train_model(
                     f"val loss {val_loss:.4f}"
                 )
 
-            # ckpt_freq마다 현재 모델과 optimizer 상태를 checkpoint 파일로 저장.
-            if ckpt_freq is not None and ckpt_freq > 0 and global_step % ckpt_freq == 0:
-                save_checkpoint(
-                    model,
-                    optimizer,
-                    epoch=epoch + 1,
-                    global_step=global_step,
-                    path=f"checkpoint_step_{global_step}.pt",
-                )
-
         # epoch 하나가 끝난 뒤 평균 loss를 계산해 기록.
         avg_epoch_loss = epoch_loss / batches_seen if batches_seen > 0 else float("nan")
         train_losses.append(avg_epoch_loss)
+
+        completed_epoch = epoch + 1
+        if ckpt_freq is not None and ckpt_freq > 0 and completed_epoch % ckpt_freq == 0:
+            save_checkpoint(
+                model,
+                optimizer,
+                epoch=completed_epoch,
+                global_step=global_step,
+                path=f"checkpoint_epoch_{completed_epoch}.pt",
+            )
 
         # tokenizer와 시작 문장이 있으면 현재 모델의 샘플 생성 결과 확인.
         if tokenizer is not None and start_context:

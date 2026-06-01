@@ -88,21 +88,17 @@ class TransformerBlock(nn.Module):
         self.layernorm1 = LayerNorm(d_model)
         self.layernorm2 = LayerNorm(d_model)
 
-        self.dropout = nn.Dropout(drop_rate)
-
     def forward(self, x: torch.Tensor, causal_mask: bool = True) -> torch.Tensor:
         """attention과 ffn을 residual connection으로 연결합니다."""
         # Pre-LN 구조로 attention 입력을 먼저 정규화한다.
         normed_x1 = self.layernorm1(x)
         attn_out = self.attention(normed_x1, causal_mask=causal_mask)
-        attn_out = self.dropout(attn_out)
         # 원본 입력을 더해 정보 손실을 줄이고 학습을 안정화한다.
         x = x + attn_out
 
         # attention 결과를 다시 정규화한 뒤 FFN에 넣는다.
         normed_x2 = self.layernorm2(x)
         ffn_out = self.ffn(normed_x2)
-        ffn_out = self.dropout(ffn_out)
         # 두 번째 residual 연결로 블록 출력을 만든다.
         x = x + ffn_out
 
