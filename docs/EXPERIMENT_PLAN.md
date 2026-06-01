@@ -37,13 +37,29 @@
 
 Colab은 같은 GPU가 항상 배정되지 않을 수 있으므로, 실험 시작 전에 환경을 확인하고 기록한다. 가능한 경우 4명 모두 같은 GPU와 같은 Python major/minor 버전에서 실행한다.
 
-#### Colab 런타임 설정
+#### Colab 웹 런타임 설정
 
 1. Colab 상단 메뉴에서 `Runtime > Change runtime type`을 연다.
 2. `Runtime type`은 `Python 3`으로 설정한다.
 3. `Hardware accelerator`는 `GPU`로 설정한다.
-4. `Runtime shape` 또는 RAM 옵션이 보이면 전원 동일하게 맞춘다. 기본값을 우선 사용하고, High-RAM은 전원이 사용할 수 있을 때만 사용한다.
-5. GPU는 가능하면 전원 `T4`로 맞춘다. `L4`, `A100` 등 다른 GPU가 섞이면 loss/accuracy 비교는 가능하지만, 학습 시간 비교는 GPU별로 분리한다.
+4. `Runtime shape` 또는 RAM 옵션이 보이면 4명 모두 동일하게 맞춘다. 기본값을 우선 사용하고, High-RAM은 4명 모두 사용할 수 있을 때만 사용한다.
+5. GPU는 가능하면 4명 모두 `T4`로 맞춘다. `L4`, `A100` 등 다른 GPU가 섞이면 loss/accuracy 비교는 가능하지만, 학습 시간 비교는 GPU별로 분리한다.
+
+#### VS Code Colab 확장 설정
+
+VS Code에서 Colab 확장을 사용하는 경우에는 Colab 웹의 `Runtime > Change runtime type` 대신 노트북 우측 상단의 커널 선택 메뉴를 사용한다.
+
+1. 실험용 `.ipynb` 파일을 VS Code에서 연다.
+2. 노트북 우측 상단의 `Select Kernel`을 클릭한다.
+3. 커널 목록에서 `Colab`을 선택한다.
+4. 가능한 경우 `Auto Connect`보다 `New Colab Server`를 선택해 새 Colab 서버를 요청한다.
+5. 서버 옵션에서 4명 모두 같은 조건을 선택한다.
+   - Machine type: `GPU`
+   - RAM/shape: `Standard` 또는 `High-RAM` 중 하나로 통일
+   - Accelerator가 표시되면 가능한 경우 `T4`로 통일
+6. 연결 후 실제 배정된 GPU, Python 버전, PyTorch/CUDA 버전은 첫 번째 셀에서 반드시 확인하고 기록한다.
+
+VS Code 확장을 사용해도 Colab GPU가 항상 고정 배정되는 것은 아니다. 따라서 설정을 맞춘 뒤에도 실제 배정 GPU가 모두 `T4`이면 학습 시간까지 직접 비교하고, `T4`, `L4`, `A100` 등 GPU가 섞이면 loss/accuracy는 비교하되 학습 시간은 GPU 종류별로 분리해 기록한다.
 
 #### 첫 번째 셀: 환경 확인
 
@@ -89,7 +105,7 @@ if torch.cuda.is_available():
 | 항목 | 통일 기준 | 다를 때 처리 |
 | --- | --- | --- |
 | Python | major.minor 버전 동일 | 다르면 런타임 재시작 후 재확인, 그래도 다르면 로그에 기록 |
-| GPU | 가능하면 전원 T4 | GPU가 섞이면 시간 비교 제외 또는 GPU별 표 분리 |
+| GPU | 가능하면 4명 모두 T4 | GPU가 섞이면 시간 비교 제외 또는 GPU별 표 분리 |
 | PyTorch | `requirements.txt` 설치 후 버전 기록 | 버전이 다르면 재설치 후 런타임 재시작 |
 | 데이터 | 같은 데이터 파일, 같은 split, 같은 seed | 다르면 해당 실험 무효 처리 후 재실행 |
 | 코드 | 같은 git commit 또는 같은 노트북 사본 | 다르면 commit/hash를 로그에 기록하고 비교 대상에서 분리 |
