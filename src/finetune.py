@@ -182,7 +182,7 @@ class GPTForSequenceClassification(nn.Module):
 
         # labels가 주어지면 학습/평가용 loss까지 함께 반환
         if labels is not None:
-            labels = labels.long()
+            labels = labels.to(logits.device).long()
             loss = nn.functional.cross_entropy(logits, labels)
             return loss, logits
 

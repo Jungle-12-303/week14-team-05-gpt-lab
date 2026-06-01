@@ -142,6 +142,35 @@ class TestGenerate:
             pytest.fail("generate 미구현")
         assert out.shape == (1, 4 + 5)
 
+    def test_generate_and_print_sample_restores_training_mode(self, capsys):
+        """샘플 출력 함수가 호출 전 train/eval 모드를 복구하는지 확인한다."""
+        from model import GPTModel
+        from train import generate_and_print_sample
+
+        class DummyTokenizer:
+            def encode(self, text):
+                return [ord(ch) % 10 for ch in text]
+
+            def decode(self, ids):
+                return "decoded"
+
+        model = GPTModel(GPT_CONFIG_SMALL)
+        model.train()
+
+        generate_and_print_sample(
+            model=model,
+            tokenizer=DummyTokenizer(),
+            device=torch.device("cpu"),
+            start_context="hi",
+            max_new_tokens=1,
+            context_size=GPT_CONFIG_SMALL["context_length"],
+            temperature=0.0,
+            top_k=None,
+        )
+        capsys.readouterr()
+
+        assert model.training
+
 
 # =============================================================================
 # plot_losses (제공 함수)

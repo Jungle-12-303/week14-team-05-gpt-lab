@@ -202,27 +202,32 @@ def generate_and_print_sample(
     top_k: int | None = 40,
 ) -> None:
     """start_context를 토큰화한 뒤 생성 결과를 문자열로 출력."""
-    # 샘플 생성은 평가 동작이므로 dropout을 끈 상태로 실행.
+    # 샘플 생성은 평가 동작으로 실행하되, 호출 전 모드는 끝나면 복구한다.
+    was_training = model.training
     model.eval()
 
-    # tokenizer.encode는 문자열을 토큰 ID 리스트로 변환.
-    encoded = tokenizer.encode(start_context)
+    try:
+        # tokenizer.encode는 문자열을 토큰 ID 리스트로 변환.
+        encoded = tokenizer.encode(start_context)
 
-    # 모델 입력 형식인 (batch_size=1, seq_len) LongTensor로 변환.
-    idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
+        # 모델 입력 형식인 (batch_size=1, seq_len) LongTensor로 변환.
+        idx = torch.tensor(encoded, dtype=torch.long, device=device).unsqueeze(0)
 
-    # 시작 토큰 뒤에 새 토큰을 생성.
-    token_ids = generate(
-        model=model,
-        idx=idx,
-        max_new_tokens=max_new_tokens,
-        context_size=context_size,
-        temperature=temperature,
-        top_k=top_k,
-    )
+        # 시작 토큰 뒤에 새 토큰을 생성.
+        token_ids = generate(
+            model=model,
+            idx=idx,
+            max_new_tokens=max_new_tokens,
+            context_size=context_size,
+            temperature=temperature,
+            top_k=top_k,
+        )
 
-    # decode는 토큰 ID 리스트를 다시 사람이 읽는 문자열로 변환.
-    print(tokenizer.decode(token_ids.squeeze(0).tolist()))
+        # decode는 토큰 ID 리스트를 다시 사람이 읽는 문자열로 변환.
+        print(tokenizer.decode(token_ids.squeeze(0).tolist()))
+    finally:
+        if was_training:
+            model.train()
 
 
 def train_model(

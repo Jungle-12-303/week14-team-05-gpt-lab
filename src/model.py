@@ -174,7 +174,10 @@ class GPTModel(nn.Module):
 
         if targets is not None:
             # 배치와 시퀀스 축을 펼쳐 전체 위치에 대해 CE loss를 계산한다.
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+            )
             return loss, logits
 
         return logits
