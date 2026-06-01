@@ -37,7 +37,12 @@ def make_sentiment_dataset(
     random_num_generator = random.Random(seed)
     random_num_generator.shuffle(train_val_data)
 
-    val_size = int(len(train_val_data) * val_ratio)
+    if val_ratio == 0 or len(train_val_data) < 2:
+        val_size = 0
+    else:
+        val_size = max(1, int(len(train_val_data) * val_ratio))
+        val_size = min(val_size, len(train_val_data) - 1)
+
     val_data = train_val_data[:val_size]
     train_data = train_val_data[val_size:]
 
