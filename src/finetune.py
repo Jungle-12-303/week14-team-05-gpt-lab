@@ -227,10 +227,46 @@ def train_epoch_sentiment(
 
     return avg_loss, accuracy
 
+
 def evaluate_sentiment(
     model: GPTForSequenceClassification,
     data_loader,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("evaluate_sentiment를 구현하세요.")
+    """감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
+    
+    was_training = model.training
+    model.eval()
+
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
+    with torch.no_grad():
+        for input_ids, labels in data_loader:
+            # 모델과 같은 device에서 계산되도록 batch를 이동
+            input_ids = input_ids.to(device)
+            labels = labels.to(device).long()
+
+            # 평가에서는 parameter를 갱신하지 않고 loss와 logits만 계산
+            loss, logits = model(input_ids, labels=labels)
+
+            # 마지막 batch 크기가 다를 수 있으므로 sample 수 기준으로 평균을 낸다.
+            batch_size = input_ids.size(0)
+            total_loss += loss.item() * batch_size
+
+            # 가장 큰 logit을 예측 class로 보고 정답 개수를 누적
+            preds = logits.argmax(dim=-1)
+            total_correct += (preds == labels).sum().item()
+            total_examples += batch_size
+
+    if total_examples == 0:
+        raise ValueError("data_loader must contain at least one batch.")
+
+    avg_loss = total_loss / total_examples
+    accuracy = total_correct / total_examples
+
+    if was_training:
+        model.train()
+
+    return avg_loss, accuracy
