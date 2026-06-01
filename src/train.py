@@ -58,14 +58,15 @@ def calc_loss_loader(
     # 선택한 배치들의 손실을 누적합니다.
     total_loss = 0.0
 
-    for batch_idx, (input_batch, target_batch) in enumerate(
-        data_loader
-    ):  # data_loader의 각 원소는 (input_batch, target_batch)이고, enumerate()를 쓰면 앞에 배치 번호가 붙습니다.
-        if batch_idx >= num_batches:
-            break
+    with torch.no_grad():
+        for batch_idx, (input_batch, target_batch) in enumerate(
+            data_loader
+        ):  # data_loader의 각 원소는 (input_batch, target_batch)이고, enumerate()를 쓰면 앞에 배치 번호가 붙습니다.
+            if batch_idx >= num_batches:
+                break
 
-        loss = calc_loss_batch(input_batch, target_batch, model, device)
-        total_loss += loss.item()
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item()
 
     return float(total_loss / num_batches)
 
@@ -81,8 +82,8 @@ def save_checkpoint(
     """model/optimizer 상태, epoch, global_step을 torch.save로 저장합니다."""
     torch.save(
         {
-            "model_state_dic": model.state_dict(),
-            "opoptimizer_state_dict": optimizer.state_dict(),
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
             "epoch": epoch,
             "global_step": global_step,
         },
@@ -100,10 +101,15 @@ def load_checkpoint(
     """torch.load로 checkpoint를 읽어 model/optimizer 상태를 복원합니다."""
     checkpoint = torch.load(path, map_location=device)
 
-    model.load_state_dict(checkpoint["model_state_dic"])
+    model_state = checkpoint.get("model_state_dict", checkpoint.get("model_state_dic"))
+    optimizer_state = checkpoint.get(
+        "optimizer_state_dict", checkpoint.get("opoptimizer_state_dict")
+    )
 
-    if optimizer is not None:
-        optimizer.load_state_dict(checkpoint["opoptimizer_state_dict"])
+    model.load_state_dict(model_state)
+
+    if optimizer is not None and optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
 
     model.to(
         device
@@ -138,11 +144,11 @@ def generate(
             top_logits, _ = torch.topk(logits, top_k)
             min_val = top_logits[
                 :, -1
-            ]  # 기본적으로 내림차순 정렬이기 때문에 top-k 안에서 가장 작은 값을 가리킴
+            ].unsqueeze(-1)  # 기본적으로 내림차순 정렬이기 때문에 top-k 안에서 가장 작은 값을 가리킴
 
             # torch.where(조건, 조건이_참일때_값, 거짓일때_값)
             logits = torch.where(
-                logits < min_val, torch.tensor(float("-inf")).to(logits.device), logits
+                logits < min_val, torch.full_like(logits, float("-inf")), logits
             )
 
         if temperature > 0.0:
@@ -154,7 +160,7 @@ def generate(
         else:
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)
 
-        if idx_next == eos_id:
+        if eos_id is not None and torch.all(idx_next == eos_id):
             break
 
         idx = torch.cat((idx, idx_next), dim=1)
@@ -178,7 +184,10 @@ def generate_and_print_sample(
     model.eval()
 
     # start_context 문자열을 tokenizer로 토큰 ID 시퀀스로 인코딩합니다.
-    start_ids = tokenizer.encode(start_context, add_bos_eos=False)
+    try:
+        start_ids = tokenizer.encode(start_context, add_bos_eos=False)
+    except TypeError:
+        start_ids = tokenizer.encode(start_context)
 
     # 인코딩한 토큰을 텐서로 만들고 device로 옮깁니다.
     idx = (
@@ -202,7 +211,10 @@ def generate_and_print_sample(
     )  # detach() : 텐서를 계산 그래프에서 분리
 
     # tokenizer로 토큰 ID 시퀀스를 다시 문자열로 디코딩합니다.
-    text = tokenizer.decode(out_ids, skip_special=True)
+    try:
+        text = tokenizer.decode(out_ids, skip_special=True)
+    except TypeError:
+        text = tokenizer.decode(out_ids)
 
     # 디코딩한 텍스트를 출력합니다.
     print(text)
@@ -227,11 +239,10 @@ def train_model(
     ckpt_freq: int | None = None,
     start_epoch: int = 0,
     global_step: int = 0,
-) -> tuple[list[float], list[float], list[int]]:
-    """사전 학습 루프를 실행하고 평가 손실과 처리한 토큰 수 기록을 반환합니다."""
-    # 손실과 지금까지 처리한 토큰 수를 추적하기 위해 리스트를 초기화합니다.
-    train_losses, val_losses, track_tokens_seen = [], [], []
-    tokens_seen = 0  # 학습 과정에서 모델이 본 토큰의 총 개수
+) -> list[float]:
+    """사전 학습 루프를 실행하고 epoch별 train loss 리스트를 반환합니다."""
+    # epoch별 훈련 손실을 기록합니다.
+    train_losses = []
 
     # 메인 훈련 루프 - epoch 단위로 전체 학습 데이터를 반복
     for epoch in range(start_epoch, num_epochs):
@@ -245,21 +256,14 @@ def train_model(
             loss.backward()
             # 계산한 gradient를 사용해 모델 파라미터를 업데이트합니다.
             optimizer.step()
-            tokens_seen += input_batch.numel()
             global_step += 1
 
             # 지정한 주기마다 훈련/검증 손실을 평가합니다.
             if eval_freq > 0 and global_step % eval_freq == 0:
                 model.eval()
-                with torch.no_grad():
-                    train_loss = calc_loss_loader(
-                        train_loader, model, device, eval_iter
-                    )
-                    val_loss = calc_loss_loader(val_loader, model, device, eval_iter)
+                train_loss = calc_loss_loader(train_loader, model, device, eval_iter)
+                val_loss = calc_loss_loader(val_loader, model, device, eval_iter)
 
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-                track_tokens_seen.append(tokens_seen)
                 print(
                     f"Ep {epoch+1} (Step {global_step:06d}): "
                     f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}"
@@ -271,10 +275,13 @@ def train_model(
                 ckpt_path = f"checkpoint_step_{global_step:06d}.pt"
                 save_checkpoint(model, optimizer, epoch, global_step, ckpt_path)
 
+        # epoch 종료 시점의 훈련 손실을 평가 모드에서 기록합니다.
+        model.eval()
+        train_losses.append(calc_loss_loader(train_loader, model, device, eval_iter))
         # epoch이 끝날 때마다 현재 모델로 샘플 텍스트를 생성해 봅니다.
         generate_and_print_sample(model, tokenizer, device, start_context)
 
-    return train_losses, val_losses, track_tokens_seen
+    return train_losses
 
 
 # epoch별 훈련 및 선택적 검증 손실 곡선을 시각화합니다.
