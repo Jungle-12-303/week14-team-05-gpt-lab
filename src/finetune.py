@@ -181,8 +181,35 @@ def train_epoch_sentiment(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("train_epoch_sentiment를 구현하세요.")
+    """감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다."""
+    model.to(device)
+    model.train()
+
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+    batches_seen = 0
+
+    for input_ids, labels in train_loader:
+        # 입력과 라벨을 같은 device로 옮긴 뒤 한 배치 학습을 수행합니다.
+        input_ids = input_ids.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        loss, logits = model(input_ids, labels=labels)
+        loss.backward()
+        optimizer.step()
+
+        # 배치 loss와 맞춘 샘플 수를 누적해 epoch 평균을 계산합니다.
+        total_loss += loss.item()
+        preds = torch.argmax(logits, dim=-1)
+        total_correct += (preds == labels).sum().item()
+        total_examples += labels.size(0)
+        batches_seen += 1
+
+    avg_loss = total_loss / batches_seen if batches_seen > 0 else float("nan")
+    accuracy = total_correct / total_examples if total_examples > 0 else float("nan")
+    return avg_loss, accuracy
 
 
 def evaluate_sentiment(
@@ -190,5 +217,32 @@ def evaluate_sentiment(
     data_loader,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("evaluate_sentiment를 구현하세요.")
+    """감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
+    model.to(device)
+    was_training = model.training
+    model.eval()
+
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+    batches_seen = 0
+
+    # 평가 단계에서는 gradient를 끄고 loss와 accuracy만 측정합니다.
+    with torch.no_grad():
+        for input_ids, labels in data_loader:
+            input_ids = input_ids.to(device)
+            labels = labels.to(device)
+
+            loss, logits = model(input_ids, labels=labels)
+            total_loss += loss.item()
+            preds = torch.argmax(logits, dim=-1)
+            total_correct += (preds == labels).sum().item()
+            total_examples += labels.size(0)
+            batches_seen += 1
+
+    if was_training:
+        model.train()
+
+    avg_loss = total_loss / batches_seen if batches_seen > 0 else float("nan")
+    accuracy = total_correct / total_examples if total_examples > 0 else float("nan")
+    return avg_loss, accuracy
