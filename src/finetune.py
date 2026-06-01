@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """NSMC 감성 분류 미세 조정 과제 템플릿."""
 
+import csv
+import json
+import random
 from pathlib import Path
 
 import torch
@@ -21,12 +24,55 @@ def make_sentiment_dataset(
     output_dir: str | Path | None = None,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """
-    TODO: NSMC TSV를 읽어 train/validation/test 감성 분류 데이터를 만듭니다.
+    NSMC TSV를 읽어 train/validation/test 감성 분류 데이터 생성.
 
     반환 형식:
         [{"text": "리뷰", "label": 0 또는 1}, ...]
     """
-    raise NotImplementedError("make_sentiment_dataset을 구현하세요.")
+    # TSV 파일에서 document가 비어 있지 않은 행만 {"text", "label"} 형식으로 변환.
+    def read_nsmc_tsv(path: str | Path) -> list[dict]:
+        rows: list[dict] = []
+        with Path(path).open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                text = (row.get("document") or "").strip()
+                label = row.get("label")
+                if not text or label is None:
+                    continue
+                rows.append({"text": text, "label": int(label)})
+        return rows
+
+    # seed를 고정한 shuffle로 train/validation 분할을 재현 가능하게 유지.
+    train_rows = read_nsmc_tsv(train_tsv_path)
+    rng = random.Random(seed)
+    rng.shuffle(train_rows)
+
+    val_size = int(len(train_rows) * val_ratio)
+    if val_ratio > 0 and len(train_rows) > 0:
+        val_size = max(1, val_size)
+    val_size = min(val_size, len(train_rows))
+
+    val_data = train_rows[:val_size]
+    train_data = train_rows[val_size:]
+
+    # test 파일이 없으면 빈 test set으로 두고, 있으면 같은 형식으로 읽음.
+    test_data = read_nsmc_tsv(test_tsv_path) if test_tsv_path is not None else []
+
+    if output_dir is not None:
+        # 필요하면 세 split을 JSON 파일로 저장해 이후 실험에서 재사용 가능하게 함.
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        for name, data in (
+            ("train.json", train_data),
+            ("validation.json", val_data),
+            ("test.json", test_data),
+        ):
+            (output_path / name).write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+    return train_data, val_data, test_data
 
 
 class ReviewSentimentDataset(Dataset):
