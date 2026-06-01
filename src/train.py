@@ -33,31 +33,38 @@ def calc_loss_loader(
     num_batches: int | None = None,
 ) -> float:
     """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용합니다."""
-    
-    total_loss = 0.0  # 손실 합산
 
-    # 배치 길이 검증
-    if len(data_loader) == 0:
-        return float("nan")  # not a number: 정상적인 숫자로 표현할 수 없는 값
-    elif num_batches is None:
-        # num_batches가 지정되지 않으면 모든 배치를 순회
-        num_batches = len(data_loader)
-    else:
-        # num_batches가 데이터 로더에 있는 배치 개수보다 크면 배치 횟수를 데이터 로더에 있는 총 배치 개수로 맞춘다.
-        num_batches = min(num_batches, len(data_loader))
-    
-    for i, (input_batch, target_batch) in enumerate(data_loader):
-        if i < num_batches:
-            loss = calc_loss_batch(input_batch, target_batch, model, device)
-            total_loss += loss.item()  # 각 배치의 손실을 합산
+    was_training = model.training  # 호출 전 모델 모드 저장
+    model.eval()  # 평가 모드로 전환
+
+    try:
+        total_loss = 0.0  # 손실 합산
+
+        # 배치 길이 검증
+        if len(data_loader) == 0:
+            return float("nan")  # not a number: 정상적인 숫자로 표현할 수 없는 값
+        elif num_batches is None:
+            # num_batches가 지정되지 않으면 모든 배치를 순회
+            num_batches = len(data_loader)
         else:
-            break
+            # num_batches가 데이터 로더에 있는 배치 개수보다 크면 배치 횟수를 데이터 로더에 있는 총 배치 개수로 맞춘다.
+            num_batches = min(num_batches, len(data_loader))
+        
+        if num_batches is not None and num_batches <= 0:
+            raise ValueError("num_batches must be positive")
 
-    if num_batches is not None and num_batches <= 0:
-        raise ValueError("num_batches must be positive")
-    
-    return total_loss / num_batches
+        with torch.no_grad():
+            for i, (input_batch, target_batch) in enumerate(data_loader):
+                if i < num_batches:
+                    loss = calc_loss_batch(input_batch, target_batch, model, device)
+                    total_loss += loss.item()  # 각 배치의 손실을 합산
+                else:
+                    break
+        return total_loss / num_batches
 
+    finally:
+        if was_training:
+            model.train()  # 호출 전 train 모드였으면 학습 모드로 복구
 
 def save_checkpoint(
     model: GPTModel,
@@ -200,18 +207,8 @@ def evaluate_model(
 ) -> tuple[float, float]:
     """train/validation loader의 평균 loss를 평가합니다."""
 
-    was_training = model.training  # 현재 모델이 train 모드인지 확인
-    model.eval()  # 평가 모드로 전환
-
-    # 계산 그래프 생성을 끄고 train/val loss 평가
-    with torch.no_grad():
-        train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
-        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
-
-    if was_training:
-        model.train()  # 평가 전 train 모드 → 평가 후 train 모드로 복귀
-    else:
-        model.eval()  # 평가 전 eval 모드  → 평가 후 eval 모드 유지
+    train_loss = calc_loss_loader(train_loader, model, device, num_batches=eval_iter)
+    val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
 
     return train_loss, val_loss
 
