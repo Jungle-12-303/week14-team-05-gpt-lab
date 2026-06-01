@@ -3,7 +3,6 @@
 
 import matplotlib.pyplot as plt
 import torch
-from bpe import BPETokenizer as bpe_tkzr
 
 try:
     from .model import GPTModel
@@ -25,6 +24,7 @@ def calc_loss_batch(
     loss, logits = model(input_batch, targets=target_batch)
     return loss
 
+
 # 배치 손실을 누적해 데이터로더 평균 손실 계산
 def calc_loss_loader(
     data_loader,
@@ -32,7 +32,7 @@ def calc_loss_loader(
     device: torch.device,
     num_batches: int | None = None,
 ) -> float:
-    """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용하세요."""
+    """data_loader의 평균 loss를 계산합니다. 검증에서는 torch.no_grad()를 사용합니다."""
     
     total_loss = 0.0  # 손실 합산
 
@@ -52,6 +52,9 @@ def calc_loss_loader(
             total_loss += loss.item()  # 각 배치의 손실을 합산
         else:
             break
+
+    if num_batches is not None and num_batches <= 0:
+        raise ValueError("num_batches must be positive")
     
     return total_loss / num_batches
 
@@ -108,7 +111,7 @@ def generate(
     top_k: int | None = None,
     eos_id: int | None = None,
 ) -> torch.Tensor:
-    """temperature와 top-k 샘플링을 지원하는 생성 함수를 구현합니다."""
+    """temperature와 top-k 샘플링을 지원하는 생성 함수입니다."""
 
     for _ in range(max_new_tokens):
         # 모델이 처리할 수 있는 최대 context 길이에 맞춰 최근 토큰만 사용
@@ -123,7 +126,10 @@ def generate(
 
         # top-k 밖의 토큰은 softmax 후 확률이 0이 되도록 -inf로 마스킹한다.
         if top_k is not None:
-            top_k = min(top_k, logits.size(-1))  # 너무 큰 top-k 값은 가용한 최대값으로 자동 보정
+            if top_k <= 0:
+                raise ValueError("top_k must be positive")
+            else:
+                top_k = min(top_k, logits.size(-1))  # 너무 큰 top-k 값은 가용한 최대값으로 자동 보정
             top_logits, _ = torch.topk(logits, top_k)
             min_val = top_logits[:, -1, None]  # shape를 (B, 1)로 유지하기 위해 새로운 차원 하나 추가
             negative_inf = torch.tensor(float("-inf"), device=logits.device, dtype=logits.dtype)
@@ -139,8 +145,11 @@ def generate(
         
         # 단일 prompt 기준: EOS가 생성되면 반복을 중단
         # (참고) idx_next는 tensor라서 batch size가 커지면 바로 if에 쓰기 어렵다.
-        if eos_id is not None and idx_next.item() == eos_id:
-            break
+        if eos_id is not None:
+            if idx_next.numel() != 1:  # batch size 1만 지원
+                raise ValueError("eos_id early stopping only supports batch size 1")
+            if idx_next.item() == eos_id:
+                break
 
         idx = torch.cat((idx, idx_next), dim=1)
 
@@ -214,7 +223,7 @@ def train_model(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     num_epochs: int,
-    eval_freq: int,
+    eval_freq: int | None, 
     eval_iter: int,
     start_context: str,
     tokenizer,
@@ -250,18 +259,23 @@ def train_model(
             global_step += 1  # 전체 학습 step 수 증가
 
             # step마다 train/validation loss 평가
-            if eval_freq is not None and global_step % eval_freq == 0:
-                train_loss, val_loss = evaluate_model(
-                    model, train_loader, val_loader, device, eval_iter
-                )
-                val_losses.append(val_loss)
+            if eval_freq is not None:
+                if eval_freq <= 0:
+                    raise ValueError("eval_freq must be positive")
+                if global_step % eval_freq == 0:
+                    train_loss, val_loss = evaluate_model(
+                        model, train_loader, val_loader, device, eval_iter
+                    )
 
-                # 현재 epoch, global step, train loss, validation loss 출력
-                print(
-                    f"Ep {epoch + 1}, Step {global_step}: "
-                    f"train loss {train_loss:.3f}, val loss {val_loss:.3f}"
-                )
+                    # 현재 epoch, global step, train loss, validation loss 출력
+                    print(
+                        f"Ep {epoch + 1}, Step {global_step}: "
+                        f"train loss {train_loss:.3f}, val loss {val_loss:.3f}"
+                    )
         
+        if num_batches is not None and num_batches <= 0:
+            raise ValueError("num_batches must be positive")
+
         # 한 epoch 동안의 평균 train loss를 계산해서 기록
         avg_epoch_loss = epoch_loss / num_batches
         train_losses.append(avg_epoch_loss)
@@ -277,15 +291,18 @@ def train_model(
         model.train()  # 학습 모드로 다시 전환
 
         # ckpt_freq가 설정되어 있으면 지정한 epoch 간격마다 checkpoint를 저장
-        if ckpt_freq is not None and (epoch + 1) % ckpt_freq == 0:
-            # 모델 상태, optimizer 상태, 현재 epoch, global step을 파일로 저장
-            save_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                epoch=epoch + 1,
-                global_step=global_step,
-                path=f"checkpoint_epoch_{epoch + 1}.pt",
-            )
+        if ckpt_freq is not None:
+            if ckpt_freq <= 0:
+                raise ValueError("ckpt_freq must be positive")
+            if ckpt_freq > 0 and (epoch + 1) % ckpt_freq == 0:
+                # 모델 상태, optimizer 상태, 현재 epoch, global step을 파일로 저장
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    epoch=epoch + 1,
+                    global_step=global_step,
+                    path=f"checkpoint_epoch_{epoch + 1}.pt",
+                )
 
     return train_losses
 
