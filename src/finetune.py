@@ -242,5 +242,38 @@ def evaluate_sentiment(
     data_loader,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("evaluate_sentiment를 구현하세요.")
+    """감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
+    # dropout 같은 학습 전용 동작을 끄기 위해 평가 모드로 전환합니다.
+    model.eval()
+
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
+    # 평가에서는 gradient가 필요 없으므로 메모리 사용과 계산 부담을 줄입니다.
+    with torch.no_grad():
+        for input_ids, labels in data_loader:
+            # 배치 데이터를 모델과 같은 CPU/GPU 장치로 옮깁니다.
+            input_ids = input_ids.to(device)
+            labels = labels.to(device)
+
+            # labels를 함께 넘겨 평가 loss와 분류 logits를 한 번에 얻습니다.
+            loss, logits = model(input_ids, labels=labels)
+
+            batch_size = labels.size(0)
+            # 배치 평균 loss를 샘플 수만큼 가중해 전체 평균을 정확히 계산합니다.
+            total_loss += loss.item() * batch_size
+
+            # 가장 높은 logit의 class를 예측값으로 사용해 accuracy를 계산합니다.
+            predictions = torch.argmax(logits, dim=-1)
+            total_correct += (predictions == labels).sum().item()
+            total_examples += batch_size
+
+    # 비어 있는 loader가 들어오면 0으로 나누지 않고 NaN을 반환합니다.
+    if total_examples == 0:
+        return float("nan"), float("nan")
+
+    avg_loss = total_loss / total_examples
+    accuracy = total_correct / total_examples
+
+    return avg_loss, accuracy
