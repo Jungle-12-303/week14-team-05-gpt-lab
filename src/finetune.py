@@ -162,8 +162,31 @@ def train_epoch_sentiment(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("train_epoch_sentiment를 구현하세요.")
+    """감성 분류 모델을 1 epoch 훈련하고 (평균 loss, accuracy) 반환."""
+    # 학습 모드에서 배치별 loss로 역전파하고 정답 개수로 accuracy 계산.
+    model.train()
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+
+    for input_ids, labels in train_loader:
+        input_ids = input_ids.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        loss, logits = model(input_ids, labels)
+        loss.backward()
+        optimizer.step()
+
+        batch_size = labels.size(0)
+        total_loss += loss.item() * batch_size
+        total_correct += (logits.argmax(dim=-1) == labels).sum().item()
+        total_samples += batch_size
+
+    if total_samples == 0:
+        return float("nan"), float("nan")
+
+    return total_loss / total_samples, total_correct / total_samples
 
 
 def evaluate_sentiment(
@@ -171,5 +194,25 @@ def evaluate_sentiment(
     data_loader,
     device: torch.device,
 ) -> tuple[float, float]:
-    """TODO: 감성 분류 모델을 평가하고 (평균 loss, accuracy)를 반환합니다."""
-    raise NotImplementedError("evaluate_sentiment를 구현하세요.")
+    """감성 분류 모델을 평가하고 (평균 loss, accuracy) 반환."""
+    # 평가 모드와 no_grad로 파라미터 업데이트 없이 loss와 accuracy만 측정.
+    model.eval()
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for input_ids, labels in data_loader:
+            input_ids = input_ids.to(device)
+            labels = labels.to(device)
+
+            loss, logits = model(input_ids, labels)
+            batch_size = labels.size(0)
+            total_loss += loss.item() * batch_size
+            total_correct += (logits.argmax(dim=-1) == labels).sum().item()
+            total_samples += batch_size
+
+    if total_samples == 0:
+        return float("nan"), float("nan")
+
+    return total_loss / total_samples, total_correct / total_samples
