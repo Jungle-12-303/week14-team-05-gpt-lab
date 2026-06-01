@@ -9,6 +9,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 try:
@@ -136,8 +137,9 @@ class GPTForSequenceClassification(nn.Module):
         super().__init__()
         self.gpt = gpt_model
         self.num_labels = num_labels
-        # TODO: dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
-        raise NotImplementedError("GPTForSequenceClassification.__init__을 구현하세요.")
+        # dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
+        self.dropout = nn.Dropout(drop_rate)
+        self.classifier = nn.Linear(gpt_model.config["emb_dim"], num_labels)
 
     def forward(
         self,
@@ -145,11 +147,32 @@ class GPTForSequenceClassification(nn.Module):
         labels: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
+        GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
 
         labels가 있으면 (loss, logits), 없으면 logits를 반환합니다.
         """
-        raise NotImplementedError("GPTForSequenceClassification.forward를 구현하세요.")
+        # 입력 토큰 ID를 GPT가 처리할 수 있는 임베딩 시퀀스로 바꿉니다.
+        hidden_states = self.gpt.embedding(input_ids)
+
+        # 각 Transformer block을 통과시키며 문맥이 반영된 hidden state를 만듭니다.
+        for block in self.gpt.blocks:
+            hidden_states = block(hidden_states)
+
+        # 마지막 정규화까지 적용해 분류에 사용할 최종 hidden state를 얻습니다.
+        hidden_states = self.gpt.final_layernorm(hidden_states)
+        # 마지막 토큰 위치의 벡터를 문장 대표 표현으로 사용합니다.
+        pooled = hidden_states[:, -1, :]
+        # 분류 직전에 dropout을 적용해 과적합을 줄입니다.
+        pooled = self.dropout(pooled)
+        # 문장 표현을 각 라벨의 점수(logits)로 변환합니다.
+        logits = self.classifier(pooled)
+
+        if labels is not None:
+            # 정답 라벨이 있으면 cross entropy loss를 함께 계산합니다.
+            loss = F.cross_entropy(logits, labels)
+            return loss, logits
+
+        return logits
 
 
 def train_epoch_sentiment(
