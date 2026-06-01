@@ -231,7 +231,7 @@ def train_model(
     """사전 학습 루프를 실행하고 평가 손실과 처리한 토큰 수 기록을 반환합니다."""
     # 손실과 지금까지 처리한 토큰 수를 추적하기 위해 리스트를 초기화합니다.
     train_losses, val_losses, track_tokens_seen = [], [], []
-    tokens_seen = 0
+    tokens_seen = 0  # 학습 과정에서 모델이 본 토큰의 총 개수
 
     # 메인 훈련 루프 - epoch 단위로 전체 학습 데이터를 반복
     for epoch in range(start_epoch, num_epochs):
