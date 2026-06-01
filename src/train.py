@@ -173,6 +173,43 @@ def generate_and_print_sample(
     top_k: int | None = 40,
 ) -> None:
     """start_context를 encode하고 generate 후 decode하여 출력합니다."""
+    # 모델을 현재 학습 모드에서 평가 모드로 전환합니다.
+    was_training = model.training  # 현재 모델의 상태를 저장
+    model.eval()
+
+    # start_context 문자열을 tokenizer로 토큰 ID 시퀀스로 인코딩합니다.
+    start_ids = tokenizer.encode(start_context, add_bos_eos=False)
+
+    # 인코딩한 토큰을 텐서로 만들고 device로 옮깁니다.
+    idx = (
+        torch.tensor(start_ids, dtype=torch.long).unsqueeze(0).to(device)
+    )  # (batch_size, seq_len)
+
+    # torch.no_grad() 안에서 generate()를 호출해 새 토큰을 생성합니다.
+    with torch.no_grad():
+        out = generate(
+            model,
+            idx,
+            max_new_tokens=max_new_tokens,
+            context_size=context_size,
+            temperature=temperature,
+            top_k=top_k,
+        )
+
+    # 생성된 토큰 ID 시퀀스를 CPU로 가져오고 1차원으로 펼칩니다.
+    out_ids = (
+        out.squeeze(0).detach().cpu().tolist()
+    )  # detach() : 텐서를 계산 그래프에서 분리
+
+    # tokenizer로 토큰 ID 시퀀스를 다시 문자열로 디코딩합니다.
+    text = tokenizer.decode(out_ids, skip_special=True)
+
+    # 디코딩한 텍스트를 출력합니다.
+    print(text)
+
+    # 원래 모델이 학습 모드였다면 다시 train 모드로 되돌립니다.
+    if was_training:
+        model.train()
 
 
 # 주기적으로 평가와 샘플 생성을 수행하며 전체 학습 루프를 실행합니다.
