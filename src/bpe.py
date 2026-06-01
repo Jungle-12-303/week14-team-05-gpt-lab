@@ -19,6 +19,7 @@ SPECIAL_TOKENS = [PAD_TOKEN, UNK_TOKEN, BOS_TOKEN, EOS_TOKEN]
 SPECIAL_IDS = {token: idx for idx, token in enumerate(SPECIAL_TOKENS)}
 BYTE_OFFSET = len(SPECIAL_TOKENS)
 NUM_BYTES = 256
+MIN_VOCAB_SIZE = BYTE_OFFSET + NUM_BYTES
 
 
 class BPETokenizer:
@@ -32,11 +33,15 @@ class BPETokenizer:
     """
 
     def __init__(self, vocab_size: int = 3000):
+        if vocab_size < MIN_VOCAB_SIZE:
+            raise ValueError(f"vocab_size must be at least {MIN_VOCAB_SIZE}.")
+
         self.vocab_size = vocab_size
         self.id_to_token = {}
         self.token_to_id = {}
         # 토크나이저가 학습한 merge 규칙 목록 (2개짜리 튜플을 원소로 가짐)
         self.merges = []
+        self._init_special_tokens()
 
     def _init_special_tokens(self):
         """
@@ -167,6 +172,9 @@ class BPETokenizer:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
+        if data["vocab_size"] < MIN_VOCAB_SIZE:
+            raise ValueError(f"vocab_size must be at least {MIN_VOCAB_SIZE}.")
+
         self.vocab_size = data["vocab_size"]
         # JSON에는 tuple이 없기 때문에 load시 다시 tuple로 변환 필요
         self.merges = [tuple(pair) for pair in data["merges"]]
@@ -250,11 +258,13 @@ class BPETokenizer:
             byte_token = self._token_id_to_bytes(token_id)
             byte_values.extend(byte_token)
 
-        return bytes(byte_values).decode("utf-8")
+        return bytes(byte_values).decode("utf-8", errors="replace")
 
     # [헬퍼 함수] merge token을 재귀적으로 펼쳐 byte 값으로 복원 (decode용)
     def _token_id_to_bytes(self, token_id: int) -> list[int]:
-        token = self.id_to_token[token_id]
+        token = self.id_to_token.get(token_id)
+        if token is None:
+            return list(UNK_TOKEN.encode("utf-8"))
 
         # token이 bytes 객체일 경우 그대로 반환
         if isinstance(token, bytes):
