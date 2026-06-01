@@ -49,6 +49,11 @@ class InputEmbedding(nn.Module):
             (batch_size, seq_len, emb_dim)
         """
         batch_size, seq_len = x.shape
+        if seq_len > self.context_length:
+            raise ValueError(
+                f"input sequence length {seq_len} exceeds context_length "
+                f"{self.context_length}"
+            )
 
         # 실제의미 token_embeds = self.token_embedding.forward(x)
         # x:
