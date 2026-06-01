@@ -147,8 +147,12 @@ class GPTForSequenceClassification(nn.Module):
         super().__init__()
         self.gpt = gpt_model
         self.num_labels = num_labels
-        # TODO: dropout과 classifier를 정의하세요. classifier 입력 차원은 gpt_model.config["emb_dim"]입니다.
-        raise NotImplementedError("GPTForSequenceClassification.__init__을 구현하세요.")
+        # GPT의 hidden state 차원은 config["emb_dim"]입니다.
+        hidden_size = gpt_model.config["emb_dim"]
+        # 분류 head 앞에 dropout을 두어 fine-tuning 중 과적합을 줄입니다.
+        self.dropout = nn.Dropout(drop_rate)
+        # 문장 대표 벡터를 긍정/부정 같은 class 개수만큼의 logits로 바꿉니다.
+        self.classifier = nn.Linear(hidden_size, num_labels)
 
     def forward(
         self,
@@ -156,11 +160,33 @@ class GPTForSequenceClassification(nn.Module):
         labels: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        TODO: GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
+        GPT hidden state에서 문장 대표 벡터를 뽑아 분류 logits를 만듭니다.
 
         labels가 있으면 (loss, logits), 없으면 logits를 반환합니다.
         """
-        raise NotImplementedError("GPTForSequenceClassification.forward를 구현하세요.")
+        # GPTModel.forward()는 언어모델용 vocab logits를 반환하므로,
+        # 감성 분류에서는 backbone의 hidden state까지만 직접 계산합니다.
+        x = self.gpt.embedding(input_ids)
+
+        # 사전학습 때와 같은 Transformer block들을 통과시켜 문맥 표현을 만듭니다.
+        for block in self.gpt.blocks:
+            x = block(x)
+
+        # GPT의 마지막 LayerNorm까지 적용한 값이 분류에 사용할 hidden state입니다.
+        hidden_states = self.gpt.final_layernorm(x)
+
+        # GPT는 causal 구조라 마지막 위치가 앞 토큰들의 정보를 모두 볼 수 있습니다.
+        # 그래서 마지막 토큰 hidden state를 문장 대표 벡터로 사용합니다.
+        pooled = hidden_states[:, -1, :]
+        pooled = self.dropout(pooled)
+        logits = self.classifier(pooled)
+
+        if labels is not None:
+            # labels가 주어지면 분류 loss와 logits를 함께 반환해 학습 루프에서 바로 씁니다.
+            loss = nn.functional.cross_entropy(logits, labels)
+            return loss, logits
+
+        return logits
 
 
 def train_epoch_sentiment(
