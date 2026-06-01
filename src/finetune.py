@@ -63,7 +63,7 @@ def _read_tsv(path: str | Path) -> list[dict]:
             text = (row.get("document") or "").strip()
             label = row.get("label")
 
-            # 빈 리뷰와 label이 "0" 또는 "1"이 아닌 행은 패스
+            # 빈 리뷰와 label이 "0" 또는 "1"이 아닌 행은 건너뛴다.
             if not text:
                 continue
             if label not in {"0", "1"}:
@@ -139,8 +139,9 @@ class GPTForSequenceClassification(nn.Module):
         super().__init__()
         self.gpt = gpt_model  # 기존 GPT backbone 저장
         self.num_labels = num_labels  # 분류 클래스 개수 저장(NSMC는 긍정/부정 예측이라 2)
-        # dropout과 classifier를 정의. classifier 입력 차원은 gpt_model.config["emb_dim"]
         emb_dim = gpt_model.config["emb_dim"]
+        
+        # GPT hidden state를 분류 label 개수만큼의 logits로 변환
         self.dropout = nn.Dropout(drop_rate)
         self.classifier = nn.Linear(emb_dim, num_labels)  # 문장 대표 벡터를 num_labels개의 logits로 변환하는 Linear layer
 
@@ -154,20 +155,21 @@ class GPTForSequenceClassification(nn.Module):
 
         labels가 있으면 (loss, logits), 없으면 logits를 반환합니다.
         """
-        # GPTModel.forward()는 LM head까지 통과하므로, 분류에서는 hidden state를 직접 만든다.
+        # GPTModel.forward()는 LM head까지 통과하므로, 분류에서는 LM head 전 hidden state를 직접 계산
         x = self.gpt.embedding(input_ids)
         
         # TransformerBlock을 통과해 각 token 위치의 문맥 표현을 만든다.    
         for block in self.gpt.blocks:
             x = block(x)
 
-        # GPT의 마지막 LayerNorm까지 적용한 hidden state를 사용한다.
+        # GPT의 마지막 LayerNorm까지 적용한 hidden state를 사용
         x = self.gpt.final_layernorm(x)
 
-        # 오른쪽 padding이 있는 경우 마지막 실제 token이 아니라 pad 위치일 수 있다.
-        pooled = x[:, -1, :]  # 단순 구현에서는 sequence의 마지막 위치를 문장 대표 벡터로 사용
+        # 고정 길이 sequence의 마지막 위치 hidden state를 문장 대표 벡터로 사용한다.
+        # 오른쪽 padding 입력에서는 마지막 위치가 pad일 수 있지만, causal attention으로 앞선 token 문맥을 반영한다.
+        pooled = x[:, -1, :]
         
-        # 분류 head에 넣기 전에 dropout으로 과적합을 줄인다.
+        # 분류 head에 넣기 전에 dropout을 적용해 과적합 위험을 낮춘다.
         pooled = self.dropout(pooled)
 
         # 문장 대표 벡터를 num_labels개의 class logits로 변환
