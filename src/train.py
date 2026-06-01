@@ -240,8 +240,8 @@ def train_model(
     # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
     model.to(device)
 
-    # start_epoch부터 지정한 epoch 수만큼 학습 반복.
-    for epoch in range(start_epoch, start_epoch + num_epochs):
+    # start_epoch부터 전체 목표 epoch 직전까지 학습을 이어갑니다.
+    for epoch in range(start_epoch, num_epochs):
         # 학습 단계에서는 dropout 등 학습용 동작을 켠 상태로 설정.
         model.train()
 
