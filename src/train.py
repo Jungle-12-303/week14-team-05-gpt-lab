@@ -227,9 +227,54 @@ def train_model(
     ckpt_freq: int | None = None,
     start_epoch: int = 0,
     global_step: int = 0,
-) -> list[float]:
-    """TODO: 사전 학습 루프를 구현하고 epoch별 train loss 리스트를 반환합니다."""
-    raise NotImplementedError("train_model을 구현하세요.")
+) -> tuple[list[float], list[float], list[int]]:
+    """사전 학습 루프를 실행하고 평가 손실과 처리한 토큰 수 기록을 반환합니다."""
+    # 손실과 지금까지 처리한 토큰 수를 추적하기 위해 리스트를 초기화합니다.
+    train_losses, val_losses, track_tokens_seen = [], [], []
+    tokens_seen = 0
+
+    # 메인 훈련 루프 - epoch 단위로 전체 학습 데이터를 반복
+    for epoch in range(start_epoch, num_epochs):
+        model.train()
+
+        for input_batch, target_batch in train_loader:
+            # 이전 배치에서 계산된 gradient를 초기화합니다.
+            optimizer.zero_grad()
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            # 현재 배치 손실로부터 gradient를 계산합니다.
+            loss.backward()
+            # 계산한 gradient를 사용해 모델 파라미터를 업데이트합니다.
+            optimizer.step()
+            tokens_seen += input_batch.numel()
+            global_step += 1
+
+            # 지정한 주기마다 훈련/검증 손실을 평가합니다.
+            if eval_freq > 0 and global_step % eval_freq == 0:
+                model.eval()
+                with torch.no_grad():
+                    train_loss = calc_loss_loader(
+                        train_loader, model, device, eval_iter
+                    )
+                    val_loss = calc_loss_loader(val_loader, model, device, eval_iter)
+
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                track_tokens_seen.append(tokens_seen)
+                print(
+                    f"Ep {epoch+1} (Step {global_step:06d}): "
+                    f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}"
+                )
+                model.train()
+
+            # 지정한 주기마다 체크포인트를 저장합니다.
+            if ckpt_freq is not None and ckpt_freq > 0 and global_step % ckpt_freq == 0:
+                ckpt_path = f"checkpoint_step_{global_step:06d}.pt"
+                save_checkpoint(model, optimizer, epoch, global_step, ckpt_path)
+
+        # epoch이 끝날 때마다 현재 모델로 샘플 텍스트를 생성해 봅니다.
+        generate_and_print_sample(model, tokenizer, device, start_context)
+
+    return train_losses, val_losses, track_tokens_seen
 
 
 # epoch별 훈련 및 선택적 검증 손실 곡선을 시각화합니다.
