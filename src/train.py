@@ -240,15 +240,22 @@ def train_model(
     start_epoch: int = 0,
     global_step: int = 0,
 ) -> list[float]:
-    """사전 학습 루프 실행 후 epoch별 평균 train loss 반환."""
+    """사전 학습 루프 실행 후 epoch별 평균 train loss 반환.
+
+    num_epochs는 전체 목표 epoch 수이고, start_epoch는 다음에 시작할 epoch입니다.
+    checkpoint의 epoch 값도 재개할 다음 epoch을 뜻합니다.
+    """
+    if num_epochs < start_epoch:
+        raise ValueError("num_epochs must be greater than or equal to start_epoch.")
+
     # epoch가 끝날 때마다 평균 train loss를 저장할 리스트.
     train_losses: list[float] = []
 
     # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
     model.to(device)
 
-    # start_epoch부터 지정한 epoch 수만큼 학습 반복.
-    for epoch in range(start_epoch, start_epoch + num_epochs):
+    # start_epoch부터 전체 목표 epoch 전까지 학습 반복.
+    for epoch in range(start_epoch, num_epochs):
         # 학습 단계에서는 dropout 등 학습용 동작을 켠 상태로 설정.
         model.train()
 
@@ -287,7 +294,7 @@ def train_model(
                 save_checkpoint(
                     model,
                     optimizer,
-                    epoch=epoch,
+                    epoch=epoch + 1,
                     global_step=global_step,
                     path=f"checkpoint_step_{global_step}.pt",
                 )
