@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """NSMC 감성 분류 미세 조정 과제 템플릿."""
 
+import csv
+import json
+import random
+import re
 from pathlib import Path
 
 import torch
@@ -16,17 +20,73 @@ except ImportError:
 def make_sentiment_dataset(
     train_tsv_path: str | Path,
     test_tsv_path: str | Path | None = None,
-    val_ratio: float = 0.08,
-    seed: int = 42,
-    output_dir: str | Path | None = None,
+    val_ratio: float = 0.08, # 학습 데이터 중 validation 데이터로 떼어낼 비율
+    seed: int = 42, # 데이터 섞을 때 사용하는 랜덤 시드
+    output_dir: str | Path | None = None, # 가공한 데이터셋을 파일로 저장할 디렉토리
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """
-    TODO: NSMC TSV를 읽어 train/validation/test 감성 분류 데이터를 만듭니다.
+    NSMC TSV를 읽어 train/validation/test 감성 분류 데이터를 만듭니다.
 
     반환 형식:
         [{"text": "리뷰", "label": 0 또는 1}, ...]
     """
-    raise NotImplementedError("make_sentiment_dataset을 구현하세요.")
+    def clean_text(text: str | None) -> str:
+        # NSMC 리뷰에는 빈 문자열이나 여러 공백이 섞일 수 있으므로 한 칸 공백으로 정리합니다.
+        if text is None:
+            return ""
+        return re.sub(r"\s+", " ", text).strip()
+
+    def read_nsmc_tsv(path: str | Path) -> list[dict]:
+        # NSMC 원본 TSV는 id, document, label 컬럼을 갖습니다.
+        # 모델에는 id가 필요 없으므로 리뷰 텍스트와 0/1 label만 남깁니다.
+        rows: list[dict] = []
+        with Path(path).open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                text = clean_text(row.get("document"))
+                label = row.get("label")
+
+                # 빈 리뷰나 감성 라벨이 아닌 값은 학습 데이터에서 제외합니다.
+                if not text or label not in {"0", "1"}:
+                    continue
+
+                rows.append({"text": text, "label": int(label)})
+        return rows
+
+    def write_jsonl(path: Path, rows: list[dict]) -> None:
+        # 한 줄에 샘플 하나씩 저장하면 나중에 큰 데이터도 줄 단위로 읽기 쉽습니다.
+        with path.open("w", encoding="utf-8") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    train_rows = read_nsmc_tsv(train_tsv_path)
+    test_rows = read_nsmc_tsv(test_tsv_path) if test_tsv_path is not None else []
+
+    # seed를 고정한 전용 Random 객체를 사용해 전역 random 상태를 건드리지 않습니다.
+    rng = random.Random(seed)
+    rng.shuffle(train_rows)
+
+    # val_ratio만큼 train TSV에서 validation 데이터를 분리합니다.
+    # 데이터가 있고 비율도 양수라면 최소 1개는 validation으로 보냅니다.
+    if train_rows and val_ratio > 0:
+        val_size = max(1, int(len(train_rows) * val_ratio))
+        val_size = min(val_size, len(train_rows))
+    else:
+        val_size = 0
+
+    val_data = train_rows[:val_size]
+    train_data = train_rows[val_size:]
+    test_data = test_rows
+
+    if output_dir is not None:
+        # output_dir이 주어지면 재사용하기 쉬운 JSONL 파일 3개로 저장합니다.
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        write_jsonl(output_path / "nsmc_sentiment_train.jsonl", train_data)
+        write_jsonl(output_path / "nsmc_sentiment_val.jsonl", val_data)
+        write_jsonl(output_path / "nsmc_sentiment_test.jsonl", test_data)
+
+    return train_data, val_data, test_data
 
 
 class ReviewSentimentDataset(Dataset):
