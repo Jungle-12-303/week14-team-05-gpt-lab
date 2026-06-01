@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """GPT 사전 학습 유틸리티 과제 템플릿."""
 
+import math
+
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F  # GPTModel에서 F.cross_entropy를 가져옴
@@ -137,6 +139,11 @@ def generate(
     eos_id: int | None = None,
 ) -> torch.Tensor:
     """temperature와 top-k 샘플링을 지원해 토큰 이어 생성."""
+    if not math.isfinite(temperature) or temperature < 0:
+        raise ValueError("temperature must be a finite number greater than or equal to 0.")
+    if top_k is not None and top_k <= 0:
+        raise ValueError("top_k must be None or a positive integer.")
+
     # 생성 중에는 dropout을 끄되, 끝나면 원래 train/eval 모드로 복구하기 위해 저장.
     was_training = model.training
     model.eval()
