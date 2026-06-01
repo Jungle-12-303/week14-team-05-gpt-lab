@@ -27,7 +27,7 @@ class LayerNorm(nn.Module):
         """마지막 차원의 평균과 분산으로 정규화한 뒤 gamma/beta를 적용합니다."""
         # 각 토큰의 feature 축 기준 평균과 분산을 구한다.
         mean = x.mean(dim=-1, keepdim=True)
-        var = x.var(dim=-1, keepdim=True)
+        var = x.var(dim=-1, keepdim=True, unbiased=False)
         # 분산이 0에 가까워질 때를 대비해 eps를 더한다.
         x_hat = (x - mean) / torch.sqrt(var + self.eps)
         out = self.gamma * x_hat + self.beta
