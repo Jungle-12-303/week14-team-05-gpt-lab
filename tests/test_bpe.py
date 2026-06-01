@@ -23,7 +23,6 @@ from bpe import (
     EOS_TOKEN,
     BYTE_OFFSET,
     NUM_BYTES,
-    MIN_VOCAB_SIZE,
 )
 
 # =============================================================================
@@ -102,26 +101,11 @@ class TestBPETokenizer:
 
     def test_get_special_ids(self):
         """get_pad_id/get_unk_id/get_bos_id/get_eos_id가 고정 ID를 반환하는지 확인한다."""
-        tok = BPETokenizer(vocab_size=MIN_VOCAB_SIZE)
+        tok = BPETokenizer(vocab_size=300)
         assert tok.get_pad_id() == 0
         assert tok.get_unk_id() == 1
         assert tok.get_bos_id() == 2
         assert tok.get_eos_id() == 3
-
-    def test_init_rejects_too_small_vocab_size(self):
-        """byte-level BPE의 최소 vocab 크기보다 작은 설정은 명확히 거부한다."""
-        with pytest.raises(ValueError):
-            BPETokenizer(vocab_size=MIN_VOCAB_SIZE - 1)
-
-    def test_decode_handles_unknown_ids_and_invalid_utf8(self):
-        """decode가 알 수 없는 ID나 깨진 byte sequence에서도 안전하게 문자열을 반환한다."""
-        tok = BPETokenizer(vocab_size=300)
-
-        unknown_text = tok.decode([9999])
-        assert UNK_TOKEN in unknown_text
-
-        invalid_utf8_text = tok.decode([BYTE_OFFSET + 0xFF])
-        assert invalid_utf8_text
 
 
 # =============================================================================

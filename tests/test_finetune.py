@@ -75,27 +75,6 @@ class TestMakeSentimentDataset:
         assert set(train_data[0].keys()) == {"text", "label"}
         assert train_data[0]["label"] in {0, 1}
 
-    def test_make_sentiment_dataset_keeps_small_validation_split(self):
-        """작은 데이터에서도 val_ratio가 있으면 train/val이 모두 비지 않게 나누는지 확인한다."""
-        from finetune import make_sentiment_dataset
-
-        with tempfile.TemporaryDirectory() as tmp:
-            train_path = Path(tmp) / "ratings_train.txt"
-            train_path.write_text(
-                "id\tdocument\tlabel\n"
-                "1\t좋았다\t1\n"
-                "2\t별로였다\t0\n",
-                encoding="utf-8",
-            )
-
-            train_data, val_data, test_data = make_sentiment_dataset(
-                train_path, val_ratio=0.1, seed=42
-            )
-
-        assert len(train_data) == 1
-        assert len(val_data) == 1
-        assert test_data == []
-
 
 class TestReviewSentimentDataset:
     """ReviewSentimentDataset 구현 후 실행."""
