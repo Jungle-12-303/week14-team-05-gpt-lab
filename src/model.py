@@ -135,7 +135,7 @@ class GPTModel(nn.Module):
             config["drop_rate"],
         )
         # 여러 TransformerBlock을 순차적으로 통과시키며 문맥 표현을 깊게 만든다.
-        self.blocks = [
+        self.blocks = nn.ModuleList([
             TransformerBlock(
                 config["emb_dim"],
                 config["n_heads"],
@@ -143,7 +143,7 @@ class GPTModel(nn.Module):
                 config["qkv_bias"],
             )
             for _ in range(config["n_layers"])
-        ]
+        ])
         # 마지막 정규화 뒤 vocabulary 크기로 사상해 다음 토큰 점수를 만든다.
         self.final_layernorm = LayerNorm(config["emb_dim"])
         self.lm_head = nn.Linear(config["emb_dim"], config["vocab_size"], bias=False)
