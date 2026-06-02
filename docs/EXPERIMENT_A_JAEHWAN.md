@@ -21,13 +21,13 @@
 
 | 항목 | 값 |
 | --- | --- |
-| Colab GPU |  |
-| Python version |  |
-| PyTorch version |  |
-| CUDA version |  |
-| git commit |  |
+| Colab GPU | T4 런타임 설정, smoke test 실제 실행 device는 CPU (`cuda_available=False`) |
+| Python version | 3.12.13 |
+| PyTorch version | 2.11.0+cpu |
+| CUDA version | None |
+| git commit | 4dd8f58 |
 | seed | 42 |
-| 데이터 경로 |  |
+| 데이터 경로 | `/content/gpt-lab/data/nsmc_lm_train.txt`, `/content/gpt-lab/data/nsmc_lm_val.txt` |
 
 ## 3. 고정 설정
 
