@@ -116,9 +116,9 @@
 | B2_lr1e-4 | learning_rate | 1e-4 | 1280 | 6.926981143653393 | 6.9377 | 3.947630472977956 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr1e-4_20260603_YEONGBEEN/checkpoints/B2_lr1e-4_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr1e-4_20260603_YEONGBEEN/metrics/B2_lr1e-4_20260603_metrics.jsonl` | B2 중 best val loss가 가장 높음 |
 | B2_lr3e-4 | learning_rate | 3e-4 | 1280 | 6.482938192784786 | 6.7623 | 4.061138451099396 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260603_YEONGBEEN/checkpoints/B2_lr3e-4_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260603_YEONGBEEN/metrics/B2_lr3e-4_20260603_metrics.jsonl` | lr1e-4보다 val loss가 낮음 |
 | B2_lr5e-4 | learning_rate | 5e-4 | 1280 | 5.855498008430004 | 6.2834 | 4.039404197533925 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr5e-4_20260603_YEONGBEEN/checkpoints/B2_lr5e-4_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr5e-4_20260603_YEONGBEEN/metrics/B2_lr5e-4_20260603_metrics.jsonl` | B2 중 best val loss가 가장 낮음 |
-| B3 | drop_rate | 0.0 |  |  |  |  |  |  |  |
-| B3 | drop_rate | 0.1 |  |  |  |  |  |  |  |
-| B3 | drop_rate | 0.2 |  |  |  |  |  |  |  |
+| B3_drop0.0 | drop_rate | 0.0 | 1280 | 6.269985944032669 | 6.6161 | 4.000428318977356 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/checkpoints/B3_drop0.0_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/metrics/B3_drop0.0_20260603_metrics.jsonl` | B3 중 best val loss가 가장 낮음 |
+| B3_drop0.1 | drop_rate | 0.1 | 1280 | 6.482938192784786 | 6.7623 | 4.039203608036042 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/checkpoints/B3_drop0.1_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/metrics/B3_drop0.1_20260603_metrics.jsonl` | drop0.0보다 val loss가 높음 |
+| B3_drop0.2 | drop_rate | 0.2 | 1280 | 6.636551804840565 | 6.8418 | 4.079183622201284 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/checkpoints/B3_drop0.2_20260603_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/metrics/B3_drop0.2_20260603_metrics.jsonl` | B3 중 best val loss가 가장 높음 |
 
 ### 5.3 B1 Batch Size 비교 분석
 
@@ -148,9 +148,23 @@ B2 learning_rate 비교에서는 learning_rate를 1e-4, 3e-4, 5e-4로 높일수�
 
 다만 이번 탐색 범위 안에서는 loss가 계속 감소했기 때문에, 최적점이 아직 5e-4보다 높은 구간에 있을 가능성도 남아 있다. 최종 후보를 확정하려면 Basic 기준에서 5e-4를 재확인하거나, 시간이 허용되면 7e-4 또는 1e-3 같은 추가 learning_rate를 짧게 검증하는 것이 좋다.
 
-### 5.5 세부 기록
+### 5.5 B3 Drop Rate 비교 분석
 
-#### 5.5.1 B1 세부 기록
+#### 5.5.1 비교 시각화
+
+![B3 drop rate trade-off](./experiment_b_asset/B3_drop_rate_tradeoff_20260603.svg)
+
+#### 5.5.2 결론 및 해석
+
+B3 drop_rate 비교에서는 `drop_rate=0.0`이 가장 낮은 validation loss를 보였다. 그래프에서 best validation loss는 drop_rate 0.0, 0.1, 0.2 순서로 6.269985944032669, 6.482938192784786, 6.636551804840565로 증가한다. 즉 현재 Light screening 조건에서는 dropout을 높일수록 검증 손실이 나빠지는 단조 증가 추세가 나타났다.
+
+세 실험은 모두 `batch_size=8`, `learning_rate=3e-4`, `context_length=64`, `num_epochs=2`, `final_global_step=1280`으로 동일하다. 따라서 B1 batch size 실험처럼 update step 차이에 따른 해석 보정이 필요하지 않고, drop_rate 자체의 영향을 비교하기 좋다. 실행 시간도 4.000428318977356분, 4.039203608036042분, 4.079183622201284분으로 거의 같아 시간 차이가 결론에 큰 영향을 주지 않는다.
+
+현재 결과는 dropout regularization이 성능을 개선하기보다 학습을 방해한 쪽에 가깝다. 작은 모델과 제한된 데이터/epoch 조건에서 아직 과적합보다 학습 부족 영향이 크기 때문에, dropout을 추가하면 모델이 충분히 학습하기 어려워졌다고 해석할 수 있다. 따라서 B3 후보는 `drop_rate=0.0`으로 잡되, Basic 이상 규모에서 train loss와 val loss 간격을 함께 보고 과적합 여부를 다시 확인하는 것이 필요하다.
+
+### 5.6 세부 기록
+
+#### 5.6.1 B1 세부 기록
 
 ##### B1_bs2
 
@@ -297,7 +311,7 @@ Epoch별 결과:
 아어다이진의다.이 이점�나..하이 ...어...하
 ```
 
-#### 5.5.2 B2 세부 기록
+#### 5.6.2 B2 세부 기록
 
 ##### B2_lr1e-4
 
@@ -414,13 +428,133 @@ Epoch별 결과:
 평점만 잘가 좀 BSaeeneeoihee tehemmops ㅜㅜhghtveeve정말 dosevit
 ```
 
+#### 5.6.3 B3 세부 기록
+
+##### B3_drop0.0
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B3_drop0.0` |
+| 변경 변수 | drop_rate |
+| 변경값 | 0.0 |
+| vocab_size | 2000 |
+| tokenizer | `/content/week14-team-05-gpt-lab/artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| batch_size | 8 |
+| learning_rate | 0.0003 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| num_epochs | 2 |
+| final_global_step | 1280 |
+| elapsed_min | 4.000428318977356 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/checkpoints/B3_drop0.0_20260603_step1280_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/checkpoints/B3_drop0.0_20260603_step1100_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/checkpoints/B3_drop0.0_20260603_step1200_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.0_20260603_YEONGBEEN/logs/B3_drop0.0_20260603.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.0010 | 6.9058 | 6.9058 |
+| 2 | 6.6161 | 6.2700 | 6.269985944032669 |
+
+생성 샘플:
+
+```text
+영화
+진짜다 그럐 Ben 영화!
+영화시아로. 너무 영화라니의 그거
+보다...
+너무....,
+! 진짜�가 더 재미있나...
+정말시지
+세에 비교하게 예
+```
+
+##### B3_drop0.1
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B3_drop0.1` |
+| 변경 변수 | drop_rate |
+| 변경값 | 0.1 |
+| vocab_size | 2000 |
+| tokenizer | `/content/week14-team-05-gpt-lab/artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| batch_size | 8 |
+| learning_rate | 0.0003 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| num_epochs | 2 |
+| final_global_step | 1280 |
+| elapsed_min | 4.039203608036042 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/checkpoints/B3_drop0.1_20260603_step1280_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/checkpoints/B3_drop0.1_20260603_step1100_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/checkpoints/B3_drop0.1_20260603_step1200_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.1_20260603_YEONGBEEN/logs/B3_drop0.1_20260603.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.0121 | 6.9196 | 6.9196 |
+| 2 | 6.7623 | 6.4829 | 6.482938192784786 |
+
+생성 샘플:
+
+```text
+영화는 �고 보이 B�게 안하고영화 영화한 시.영화로,
+0분에 취한
+세의 찌다 그�이 아을 보여스h�니
+별........ 
+```
+
+##### B3_drop0.2
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B3_drop0.2` |
+| 변경 변수 | drop_rate |
+| 변경값 | 0.2 |
+| vocab_size | 2000 |
+| tokenizer | `/content/week14-team-05-gpt-lab/artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| batch_size | 8 |
+| learning_rate | 0.0003 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| num_epochs | 2 |
+| final_global_step | 1280 |
+| elapsed_min | 4.079183622201284 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/checkpoints/B3_drop0.2_20260603_step1280_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/checkpoints/B3_drop0.2_20260603_step1100_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/checkpoints/B3_drop0.2_20260603_step1200_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B3_drop0.2_20260603_YEONGBEEN/logs/B3_drop0.2_20260603.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.0227 | 6.9266 | 6.9266 |
+| 2 | 6.8418 | 6.6366 | 6.636551804840565 |
+
+생성 샘플:
+
+```text
+영화는 �고 보이 B�게 안하고영화 영화이 그.영화로이 안해
+ 영화로..의
+을 위다.,이 그한....가.. 영화을 가니
+이 쓸한영화한
+```
+
 ## 6. Best 후보
 
 | 항목 | 선택값 | 선택 이유 | 기준 metric |
 | --- | --- | --- | --- |
 | best batch_size | 2 | Light screening에서 B1 후보 중 best val loss가 가장 낮음. 소요 시간은 bs4/bs8/bs16보다 길어 Basic 기준 재확인 필요 | best_val_loss 5.705958318710327 |
 | best learning_rate | 5e-4 | Light screening에서 B2 후보 중 best val loss가 가장 낮음. 발산 징후 없이 loss가 감소했으나 Basic 기준 재확인 필요 | best_val_loss 5.855498008430004 |
-| best drop_rate |  |  |  |
+| best drop_rate | 0.0 | Light screening에서 B3 후보 중 best val loss가 가장 낮음. dropout을 높일수록 val loss가 증가해 현재 조건에서는 regularization보다 학습량 확보가 더 중요해 보임 | best_val_loss 6.269985944032669 |
 
 ## 7. 실패 또는 중단 실험
 
@@ -430,7 +564,22 @@ Epoch별 결과:
 
 ## 8. 최종 결론
 
-```text
-가장 좋은 learning_rate, batch_size, drop_rate 후보와
-그 선택 근거를 validation loss, 안정성, 소요 시간 기준으로 적는다.
-```
+Light screening 기준으로 가장 좋은 후보는 `batch_size=2`, `learning_rate=5e-4`, `drop_rate=0.0`이다. validation loss 기준으로 B1에서는 `batch_size=2`, B2에서는 `learning_rate=5e-4`, B3에서는 `drop_rate=0.0`이 각각 가장 낮은 값을 보였다.
+
+B2와 B3는 모든 후보가 동일한 `final_global_step=1280`에서 비교되었기 때문에 각각 learning_rate와 drop_rate의 영향을 비교하기 좋다. `learning_rate`는 1e-4, 3e-4, 5e-4 순서로 높아질수록 validation loss가 낮아졌고, `drop_rate`는 0.0, 0.1, 0.2 순서로 높아질수록 validation loss가 높아졌다. 따라서 현재 실험 규모에서는 더 강한 학습률이 도움이 되었고, dropout regularization은 오히려 학습을 방해한 것으로 해석된다.
+
+B1 batch_size 결과는 해석에 주의가 필요하다. 같은 epoch 수로 실행했기 때문에 `batch_size=2`는 `batch_size=8`보다 optimizer update step이 훨씬 많았다. 따라서 B1의 결과는 순수한 batch_size 차이라기보다, 작은 batch size에서 더 많은 update step을 확보한 효과까지 포함한다. 최종 보고에서는 `batch_size=2`가 Light screening에서 가장 낮은 loss를 보였지만, 공정한 batch_size 비교를 위해서는 같은 update step 또는 같은 token budget 기준의 추가 실험이 필요하다고 명시한다.
+
+세 후보를 조합한 `batch_size=2`, `learning_rate=5e-4`, `drop_rate=0.0`은 다음 실험의 유력한 출발점이다. 다만 이번 실험은 각 변수를 독립적으로 바꾼 비교이므로, 이 조합이 곧바로 전역 최적 조합임을 의미하지는 않는다. 조합 실험으로 재검증한 뒤 최종 기본 설정으로 확정하는 것이 적절하다.
+
+## 9. 추후 실험 계획
+
+1차 후속 실험은 후보 조합을 Basic 규모에서 재검증하는 것이다. `batch_size=2`, `learning_rate=5e-4`, `drop_rate=0.0`을 하나의 조합으로 실행하고, 기존 기본값인 `batch_size=8`, `learning_rate=3e-4`, `drop_rate=0.1`과 validation loss, 학습 시간, 생성 샘플 품질을 비교한다.
+
+2차 후속 실험은 learning_rate 탐색 범위를 확장하는 것이다. B2에서 5e-4까지 loss가 계속 낮아졌기 때문에, 시간이 허용되면 `7e-4`, `1e-3`을 추가로 테스트해 loss가 더 낮아지는지 또는 발산/불안정 구간이 나타나는지 확인한다. 이 실험은 `batch_size=8`, `drop_rate=0.1`, `final_global_step`을 고정해 learning_rate 영향만 비교하는 방식이 적절하다.
+
+3차 후속 실험은 batch_size를 공정하게 재비교하는 것이다. 현재 B1은 batch_size가 작을수록 update step이 많아지는 구조이므로, `batch_size=2`, `4`, `8`, `16`을 같은 `final_global_step` 또는 같은 총 token 처리량 기준으로 다시 비교한다. 이 결과가 나오면 batch_size 자체가 성능에 미치는 영향과 update step 수의 영향을 분리할 수 있다.
+
+4차 후속 실험은 과적합 여부 확인이다. drop_rate 0.0이 가장 좋았지만, 이는 Light screening에서 학습 부족 영향이 더 컸기 때문일 수 있다. Basic 이상 규모에서 train loss와 val loss 간격이 커지는지 확인하고, 간격이 커지면 `drop_rate=0.1`을 다시 후보로 올린다.
+
+5차 후속 실험은 downstream 태스크 연결이다. 사전 학습 checkpoint 중 validation loss가 낮은 후보를 선택해 감성 분류 데이터에 적용하고, 사전 학습 성능이 실제 분류 성능으로 이어지는지 확인한다. 최종 모델 선택은 pretrain validation loss만이 아니라 downstream validation accuracy 또는 loss까지 함께 기준으로 삼는다.
