@@ -108,7 +108,11 @@ def add_common_args(
     parser.add_argument("--output-root", type=Path, default=Path(default_output_root()))
     parser.add_argument("--vocab-size", type=int, default=3000)
     parser.add_argument("--tokenizer-path", type=Path, default=None)
-    parser.add_argument("--force-tokenizer-train", action="store_true")
+    parser.add_argument(
+        "--force-tokenizer-train",
+        action="store_true",
+        help="Retrain BPE instead of loading the shared tokenizer artifact.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--quick", action="store_true", help="Run a smoke-test sized experiment.")
     parser.add_argument("--install", action="store_true", help="Install requirements before running.")
@@ -124,6 +128,15 @@ def add_common_args(
     parser.add_argument("--val-char-limit", type=int, default=None)
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument("--dry-run", action="store_true", help="Write configs and print the plan without training.")
+    parser.add_argument("--wandb", action="store_true", help="Log experiment metrics to Weights & Biases.")
+    parser.add_argument("--wandb-project", default="gpt-lab-pretrain")
+    parser.add_argument("--wandb-entity", default=None)
+    parser.add_argument(
+        "--wandb-mode",
+        choices=["online", "offline", "disabled"],
+        default="offline",
+        help="Use offline unless WANDB_API_KEY/login is configured.",
+    )
 
 
 def selected_experiments(args: argparse.Namespace, experiments: list[dict]) -> list[dict]:
@@ -204,15 +217,9 @@ def default_tokenizer_path(vocab_size: int) -> Path:
     return ROOT / "artifacts" / "tokenizers" / f"nsmc_bpe_vocab{vocab_size}_full.json"
 
 
-def quick_tokenizer_path(output_dir: Path, vocab_size: int) -> Path:
-    return output_dir / "tokenizers" / f"nsmc_bpe_vocab{vocab_size}_full.json"
-
-
 def planned_tokenizer_path(args: argparse.Namespace, output_dir: Path) -> Path:
     if args.tokenizer_path is not None:
         return args.tokenizer_path
-    if args.quick:
-        return quick_tokenizer_path(output_dir, args.vocab_size)
     return default_tokenizer_path(args.vocab_size)
 
 
@@ -234,6 +241,13 @@ def load_or_train_tokenizer(
         print("loaded tokenizer:", tokenizer_path)
         return tokenizer, tokenizer_path
 
+    if not args.force_tokenizer_train:
+        raise FileNotFoundError(
+            f"tokenizer file not found: {tokenizer_path}. "
+            "Use the shared artifacts/tokenizers/nsmc_bpe_vocab3000_full.json file, "
+            "or pass --force-tokenizer-train only when you intentionally want to retrain BPE."
+        )
+
     tokenizer.train(train_text)
     tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
     tokenizer.save(tokenizer_path)
@@ -248,8 +262,6 @@ def make_config(args: argparse.Namespace, experiment: dict) -> dict:
         config["num_epochs"] = args.num_epochs
     if args.quick:
         config.update(SMOKE_OVERRIDES)
-        if args.vocab_size == 3000:
-            args.vocab_size = 300
         if args.train_char_limit is None:
             args.train_char_limit = 5000
         if args.val_char_limit is None:
@@ -299,6 +311,47 @@ def build_output_dirs(args: argparse.Namespace, experiment_id: str) -> dict[str,
 def write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def init_wandb(args: argparse.Namespace, *, run_name: str, run_config: dict):
+    if not args.wandb:
+        return None
+    try:
+        import wandb
+    except ImportError as exc:
+        raise RuntimeError(
+            "wandb is not installed. Run `pip install -r requirements.txt` or disable --wandb."
+        ) from exc
+
+    return wandb.init(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        name=run_name,
+        mode=args.wandb_mode,
+        config=run_config,
+        dir=str(ROOT),
+    )
+
+
+def make_wandb_callback(wandb_run):
+    if wandb_run is None:
+        return None
+
+    def log_metric(record: dict) -> None:
+        numeric_metrics = {
+            key: value
+            for key, value in record.items()
+            if isinstance(value, (int, float, bool)) and key not in {"global_step"}
+        }
+        payload = {
+            f"{record.get('event', 'metric')}/{key}": value
+            for key, value in numeric_metrics.items()
+        }
+        payload["epoch"] = record.get("epoch")
+        payload["event"] = record.get("event")
+        wandb_run.log(payload, step=record.get("global_step"))
+
+    return log_metric
 
 
 def run_one_experiment(
@@ -473,29 +526,36 @@ def _run_one_experiment_logged(
     print(json.dumps(run_config, ensure_ascii=False, indent=2))
 
     history: dict = {}
+    wandb_run = init_wandb(args, run_name=f"{experiment['id']}_{args.date}_{args.owner}", run_config=run_config)
+    metrics_callback = make_wandb_callback(wandb_run)
     if not args.dry_run:
-        train_model(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            optimizer=optimizer,
-            device=device,
-            num_epochs=config["num_epochs"],
-            eval_freq=config["eval_every_steps"],
-            eval_iter=args.eval_iter,
-            start_context=args.start_context,
-            tokenizer=tokenizer,
-            ckpt_dir=dirs["checkpoints"],
-            experiment_id=experiment["id"],
-            run_date=args.date,
-            history=history,
-            log_every_steps=config["log_every_steps"],
-            save_every_steps=config["save_every_steps"],
-            keep_latest=config["keep_latest"],
-            metrics_path=metrics_path,
-            grad_clip_norm=config.get("grad_clip_norm"),
-            lr_scheduler=scheduler,
-        )
+        try:
+            train_model(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                optimizer=optimizer,
+                device=device,
+                num_epochs=config["num_epochs"],
+                eval_freq=config["eval_every_steps"],
+                eval_iter=args.eval_iter,
+                start_context=args.start_context,
+                tokenizer=tokenizer,
+                ckpt_dir=dirs["checkpoints"],
+                experiment_id=experiment["id"],
+                run_date=args.date,
+                history=history,
+                log_every_steps=config["log_every_steps"],
+                save_every_steps=config["save_every_steps"],
+                keep_latest=config["keep_latest"],
+                metrics_path=metrics_path,
+                metrics_callback=metrics_callback,
+                grad_clip_norm=config.get("grad_clip_norm"),
+                lr_scheduler=scheduler,
+            )
+        finally:
+            if wandb_run is not None:
+                wandb_run.finish()
 
     elapsed_min = (time.time() - started_at) / 60
     summary = {

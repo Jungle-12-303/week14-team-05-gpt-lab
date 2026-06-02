@@ -299,6 +299,7 @@ def train_model(
     save_every_steps: int | None = None,
     keep_latest: int = 2,
     metrics_path: str | Path | None = None,
+    metrics_callback=None,
     grad_clip_norm: float | None = None,
     lr_scheduler=None,
 ) -> list[float]:
@@ -362,18 +363,18 @@ def train_model(
             global_step += 1
 
             if log_every_steps is not None and log_every_steps > 0 and global_step % log_every_steps == 0:
-                _append_metric_jsonl(
-                    metrics_path,
-                    {
-                        "event": "train_step",
-                        "timestamp": datetime.now().isoformat(timespec="seconds"),
-                        "experiment_id": experiment_id,
-                        "epoch": epoch + 1,
-                        "global_step": global_step,
-                        "train_loss": float(loss.item()),
-                        "learning_rate": _current_lr(optimizer),
-                    },
-                )
+                record = {
+                    "event": "train_step",
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "experiment_id": experiment_id,
+                    "epoch": epoch + 1,
+                    "global_step": global_step,
+                    "train_loss": float(loss.item()),
+                    "learning_rate": _current_lr(optimizer),
+                }
+                _append_metric_jsonl(metrics_path, record)
+                if metrics_callback is not None:
+                    metrics_callback(record)
 
             # eval_freq마다 train/validation loss를 일부 배치 기준으로 점검.
             if eval_freq > 0 and global_step % eval_freq == 0:
@@ -401,22 +402,22 @@ def train_model(
                     )
                     checkpoint_path = str(best_checkpoint_path)
 
-                _append_metric_jsonl(
-                    metrics_path,
-                    {
-                        "event": "eval",
-                        "timestamp": datetime.now().isoformat(timespec="seconds"),
-                        "experiment_id": experiment_id,
-                        "epoch": epoch + 1,
-                        "global_step": global_step,
-                        "train_loss": float(train_loss),
-                        "val_loss": float(val_loss),
-                        "best_val_loss": float(best_val_loss),
-                        "is_best": is_best,
-                        "checkpoint_path": checkpoint_path,
-                        "learning_rate": _current_lr(optimizer),
-                    },
-                )
+                record = {
+                    "event": "eval",
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "experiment_id": experiment_id,
+                    "epoch": epoch + 1,
+                    "global_step": global_step,
+                    "train_loss": float(train_loss),
+                    "val_loss": float(val_loss),
+                    "best_val_loss": float(best_val_loss),
+                    "is_best": is_best,
+                    "checkpoint_path": checkpoint_path,
+                    "learning_rate": _current_lr(optimizer),
+                }
+                _append_metric_jsonl(metrics_path, record)
+                if metrics_callback is not None:
+                    metrics_callback(record)
                 print(
                     f"step {global_step}: train loss {train_loss:.4f}, "
                     f"val loss {val_loss:.4f}"
@@ -442,18 +443,18 @@ def train_model(
                     latest_checkpoint_paths,
                     keep_latest=keep_latest,
                 )
-                _append_metric_jsonl(
-                    metrics_path,
-                    {
-                        "event": "checkpoint",
-                        "timestamp": datetime.now().isoformat(timespec="seconds"),
-                        "experiment_id": experiment_id,
-                        "epoch": epoch + 1,
-                        "global_step": global_step,
-                        "checkpoint_type": "latest",
-                        "checkpoint_path": str(latest_checkpoint_path),
-                    },
-                )
+                record = {
+                    "event": "checkpoint",
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "experiment_id": experiment_id,
+                    "epoch": epoch + 1,
+                    "global_step": global_step,
+                    "checkpoint_type": "latest",
+                    "checkpoint_path": str(latest_checkpoint_path),
+                }
+                _append_metric_jsonl(metrics_path, record)
+                if metrics_callback is not None:
+                    metrics_callback(record)
 
         # epoch 하나가 끝난 뒤 평균 loss를 계산해 기록.
         avg_epoch_loss = epoch_loss / batches_seen if batches_seen > 0 else float("nan")
@@ -483,21 +484,21 @@ def train_model(
             )
 
         completed_epoch = epoch + 1
-        _append_metric_jsonl(
-            metrics_path,
-            {
-                "event": "epoch_end",
-                "timestamp": datetime.now().isoformat(timespec="seconds"),
-                "experiment_id": experiment_id,
-                "epoch": completed_epoch,
-                "global_step": global_step,
-                "train_loss": float(avg_epoch_loss),
-                "val_loss": float(val_loss),
-                "best_val_loss": float(best_val_loss),
-                "best_checkpoint_path": str(best_checkpoint_path) if best_checkpoint_path else None,
-                "learning_rate": _current_lr(optimizer),
-            },
-        )
+        record = {
+            "event": "epoch_end",
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "experiment_id": experiment_id,
+            "epoch": completed_epoch,
+            "global_step": global_step,
+            "train_loss": float(avg_epoch_loss),
+            "val_loss": float(val_loss),
+            "best_val_loss": float(best_val_loss),
+            "best_checkpoint_path": str(best_checkpoint_path) if best_checkpoint_path else None,
+            "learning_rate": _current_lr(optimizer),
+        }
+        _append_metric_jsonl(metrics_path, record)
+        if metrics_callback is not None:
+            metrics_callback(record)
 
         if ckpt_freq is not None and ckpt_freq > 0 and completed_epoch % ckpt_freq == 0:
             save_checkpoint(
