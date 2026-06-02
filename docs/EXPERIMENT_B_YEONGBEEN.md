@@ -109,10 +109,10 @@
 
 | 실험 ID | 변경 변수 | 값 | best global_step | best val loss | final train loss | 소요 시간 | best checkpoint | metric JSONL | 결론 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1 | batch_size | 2 |  |  |  |  |  |  |  |
-| B1 | batch_size | 4 |  |  |  |  |  |  |  |
-| B1 | batch_size | 8 |  |  |  |  |  |  |  |
-| B1 | batch_size | 16 |  |  |  |  |  |  |  |
+| B1_bs2 | batch_size | 2 | 5100 | 5.705958318710327 | 6.0562 | 4.722735257943471 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/checkpoints/B1_bs2_20260602_step5100_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/metrics/B1_bs2_20260602_metrics.jsonl` | B1 중 best val loss가 가장 낮음 |
+| B1_bs4 | batch_size | 4 | 2558 | 6.024056546390057 | 6.4372 | 3.9405784408251443 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/checkpoints/B1_bs4_20260602_step2558_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/metrics/B1_bs4_20260602_metrics.jsonl` | bs2보다 빠르지만 현재 기준 val loss는 더 높음 |
+| B1_bs8 | batch_size | 8 | 1280 | 6.482938192784786 | 6.7623 | 3.7096256772677103 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/checkpoints/B1_bs8_20260602_step1280_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/metrics/B1_bs8_20260602_metrics.jsonl` | bs4보다 약간 빠르지만 val loss는 더 높음 |
+| B1_bs16 | batch_size | 16 | 640 | 6.815157011151314 | 6.9020 | 3.703726518154144 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/checkpoints/B1_bs16_20260602_step0640_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/metrics/B1_bs16_20260602_metrics.jsonl` | 가장 빠른 편이지만 B1 중 val loss가 가장 높음 |
 | B2 | learning_rate | 1e-4 |  |  |  |  |  |  |  |
 | B2 | learning_rate | 3e-4 |  |  |  |  |  |  |  |
 | B2 | learning_rate | 5e-4 |  |  |  |  |  |  |  |
@@ -120,11 +120,168 @@
 | B3 | drop_rate | 0.1 |  |  |  |  |  |  |  |
 | B3 | drop_rate | 0.2 |  |  |  |  |  |  |  |
 
+B1 batch_size 비교에서는 `batch_size=2`가 가장 낮은 validation loss를 보였다. 다만 epoch 수를 고정했기 때문에 batch_size가 커질수록 optimizer update step 수가 줄어든다. 따라서 이 결과는 같은 epoch 예산에서의 비교로 해석하고, 최종 후보는 Basic 기준 재확인이 필요하다.
+
+#### B1 batch_size 비교 시각화
+
+![B1 batch size trade-off](./experiment_b_asset/B1_batch_size_tradeoff_20260602.svg)
+
+그래프는 B1 실험 결과를 `best validation loss`, `elapsed time`, `final global step` 세 관점으로 비교한다. `batch_size=2`는 best validation loss가 5.705958318710327로 가장 낮아 성능 기준으로 가장 좋은 후보였다. 반면 소요 시간은 4.722735257943471분으로 가장 길었고, final global step도 5114로 가장 많았다.
+
+`batch_size`가 4, 8, 16으로 커질수록 실행 시간은 3.9405784408251443분, 3.7096256772677103분, 3.703726518154144분으로 줄었지만, best validation loss는 6.024056546390057, 6.482938192784786, 6.815157011151314로 점점 나빠졌다. 특히 final global step이 2558, 1280, 640으로 감소하므로, 이 결과는 큰 batch size 자체의 성능 저하라기보다 같은 epoch 수에서 optimizer update 기회가 줄어든 영향까지 포함한 비교로 해석해야 한다.
+
+따라서 Light screening 기준 성능 우선 후보는 `batch_size=2`이고, 시간 효율까지 고려한 보조 후보는 `batch_size=4`다. 최종 선택은 Basic 기준에서 `batch_size=2`를 재확인하거나, 같은 update step 수를 맞춘 추가 비교를 통해 보완하는 것이 좋다.
+
+#### B1_bs2 세부 기록
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B1_bs2` |
+| 변경 변수 | batch_size |
+| 변경값 | 2 |
+| vocab_size | 2000 |
+| tokenizer | `artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| learning_rate | 0.0003 |
+| drop_rate | 0.1 |
+| num_epochs | 2 |
+| final_global_step | 5114 |
+| elapsed_min | 4.722735257943471 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/checkpoints/B1_bs2_20260602_step5100_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/checkpoints/B1_bs2_20260602_step5000_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/checkpoints/B1_bs2_20260602_step5100_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs2_20260602_YEONGBEEN/logs/B1_bs2_20260602.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 6.8774 | 6.4467 | 6.4467 |
+| 2 | 6.0562 | 5.7278 | 5.705958318710327 |
+
+생성 샘플:
+
+```text
+영화.. 이건 이런 드라마가 아깝다
+아도 그저씨, 이런거지마라가 가능하는 장면에 미소를 주어나온다. 스토리도 안되는 장면을 생각나가 좋아도 이럴고 보길심
+```
+
+#### B1_bs4 세부 기록
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B1_bs4` |
+| 변경 변수 | batch_size |
+| 변경값 | 4 |
+| vocab_size | 2000 |
+| tokenizer | `artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| learning_rate | 0.0003 |
+| drop_rate | 0.1 |
+| num_epochs | 2 |
+| final_global_step | 2558 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/checkpoints/B1_bs4_20260602_step2558_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/checkpoints/B1_bs4_20260602_step2400_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/checkpoints/B1_bs4_20260602_step2500_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs4_20260602_YEONGBEEN/logs/B1_bs4_20260602.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 6.9730 | 6.7991 | 6.7991 |
+| 2 | 6.4372 | 6.0241 | 6.024056546390057 |
+
+생성 샘플:
+
+```text
+영화도 맫�스도 아닌게 봤습니다..
+정말아까 bompesodF도 볼수를 볼고 다큐....
+너무재밌작? 아....oeaT��는 왜 자아까
+```
+
+#### B1_bs8 세부 기록
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B1_bs8` |
+| 변경 변수 | batch_size |
+| 변경값 | 8 |
+| vocab_size | 2000 |
+| tokenizer | `artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| learning_rate | 0.0003 |
+| drop_rate | 0.1 |
+| num_epochs | 2 |
+| final_global_step | 1280 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/checkpoints/B1_bs8_20260602_step1280_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/checkpoints/B1_bs8_20260602_step1100_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/checkpoints/B1_bs8_20260602_step1200_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs8_20260602_YEONGBEEN/logs/B1_bs8_20260602.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.0121 | 6.9196 | 6.9196 |
+| 2 | 6.7623 | 6.4829 | 6.482938192784786 |
+
+생성 샘플:
+
+```text
+영화는 �고 보이 B�게 안하고영화 영화한 시.영화로,
+0분에 취한
+세의 찌다 그�이 아을 보여스h�니
+별........ 
+```
+
+#### B1_bs16 세부 기록
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 규모 | Light screening |
+| experiment_id | `B1_bs16` |
+| 변경 변수 | batch_size |
+| 변경값 | 16 |
+| vocab_size | 2000 |
+| tokenizer | `artifacts/tokenizers/nsmc_bpe_vocab2000_full.json` |
+| train_char_limit / val_char_limit | 500000 / 50000 |
+| context_length | 64 |
+| n_layers / emb_dim / n_heads | 2 / 128 / 4 |
+| learning_rate | 0.0003 |
+| drop_rate | 0.1 |
+| num_epochs | 2 |
+| final_global_step | 640 |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/checkpoints/B1_bs16_20260602_step0640_best.pt` |
+| latest checkpoints | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/checkpoints/B1_bs16_20260602_step0500_latest.pt`, `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/checkpoints/B1_bs16_20260602_step0600_latest.pt` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B1_bs16_20260602_YEONGBEEN/logs/B1_bs16_20260602.out` |
+
+Epoch별 결과:
+
+| epoch | train loss | val loss | best val loss |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.0544 | 6.9313 | 6.9313 |
+| 2 | 6.9020 | 6.8152 | 6.815157011151314 |
+
+생성 샘플:
+
+```text
+영화에가장다�아�한. 그 그�도리아지만 이하고지는
+만나어은�은로다.
+아어다이진의다.이 이점�나..하이 ...어...하
+```
+
 ## 6. Best 후보
 
 | 항목 | 선택값 | 선택 이유 | 기준 metric |
 | --- | --- | --- | --- |
-| best batch_size |  |  |  |
+| best batch_size | 2 | Light screening에서 B1 후보 중 best val loss가 가장 낮음. 소요 시간은 bs4/bs8/bs16보다 길어 Basic 기준 재확인 필요 | best_val_loss 5.705958318710327 |
 | best learning_rate |  |  |  |
 | best drop_rate |  |  |  |
 
