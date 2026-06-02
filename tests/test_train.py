@@ -118,6 +118,73 @@ class TestCheckpoint:
         assert step == 10
 
 
+class TestStepArtifacts:
+    """step 단위 metric/checkpoint 저장 확인."""
+
+    def test_train_model_writes_metrics_and_step_checkpoints(self, tmp_path):
+        """train_model()이 JSONL metric과 latest/best checkpoint를 남기는지 확인한다."""
+        from dataset import create_dataloader
+        from model import GPTModel
+        from train import train_model
+
+        config = {
+            "vocab_size": 100,
+            "context_length": 8,
+            "emb_dim": 16,
+            "n_heads": 4,
+            "n_layers": 1,
+            "drop_rate": 0.0,
+            "qkv_bias": False,
+        }
+        train_loader = create_dataloader(
+            list(range(80)),
+            context_length=8,
+            batch_size=2,
+            shuffle=False,
+        )
+        val_loader = create_dataloader(
+            list(range(40)),
+            context_length=8,
+            batch_size=2,
+            shuffle=False,
+        )
+        model = GPTModel(config)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        metrics_path = tmp_path / "metrics" / "T0_metrics.jsonl"
+        ckpt_dir = tmp_path / "checkpoints"
+        history = {}
+
+        train_model(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            device=torch.device("cpu"),
+            num_epochs=1,
+            eval_freq=1,
+            eval_iter=1,
+            start_context="",
+            tokenizer=None,
+            ckpt_dir=ckpt_dir,
+            experiment_id="T0",
+            run_date="20260602",
+            history=history,
+            log_every_steps=1,
+            save_every_steps=1,
+            keep_latest=1,
+            metrics_path=metrics_path,
+        )
+
+        assert metrics_path.exists()
+        lines = metrics_path.read_text(encoding="utf-8").splitlines()
+        assert any('"event": "eval"' in line for line in lines)
+        assert any('"event": "checkpoint"' in line for line in lines)
+        assert history["best_checkpoint_path"]
+        assert Path(history["best_checkpoint_path"]).exists()
+        latest_checkpoints = list(ckpt_dir.glob("*_latest.pt"))
+        assert len(latest_checkpoints) == 1
+
+
 # =============================================================================
 # generate (temperature, top_k)
 # =============================================================================

@@ -65,9 +65,9 @@
 | 특수 토큰 ID | `<pad>=0`, `<unk>=1`, `<bos>=2`, `<eos>=3` |
 | byte token ID 범위 | 4~259 |
 | vocab_size | (예: 3000) |
-| 학습 corpus 크기 | (예: `corpus[:1_500_000]`) |
+| 학습 corpus 크기 | (예: `corpus[:1_500_000]`, 현재 데이터가 더 짧으면 전체 train corpus) |
 | 어휘 학습 시간 | (예: Colab CPU Basic 설정 35분) |
-| vocabulary 저장 경로 | (예: `data/nsmc_bpe_vocab_3000.json`) |
+| vocabulary 저장 경로 | (예: `artifacts/tokenizers/nsmc_bpe_vocab3000_full.json`) |
 | 인코딩/디코딩 복원 예시 | (예: `decode(encode("이 영화는 좋았다")) == 원문`) |
 
 ---
@@ -105,7 +105,25 @@
 | 학습 | eval_freq, eval_iter |  |
 | 최적화 | lr, weight_decay |  |
 
-### 6.2 결과
+### 6.2 Basic baseline 1회 실행 기준
+
+팀이 기준선으로 정한 baseline config를 Basic 기준으로 1회 실행한 결과를 먼저 기록합니다. Basic 기준은 `corpus[:1_500_000]`, `vocab_size=3000`, `context_length=128`입니다. 현재 `data/nsmc_lm_train.txt`가 1,500,000자보다 짧으면 `corpus[:1_500_000]`은 사실상 전체 LM train corpus를 의미합니다. `A0`는 screening baseline이고, `A0_basic`은 `--vocab-size 3000 --train-char-limit 1500000`로 실행하는 Basic 제출 기준 baseline입니다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 실험 ID | A0_basic |
+| 실행 목적 | 기본 제출 기준 baseline |
+| 사용한 데이터 크기 | Basic (`corpus[:1_500_000]`, 실제 데이터가 더 짧으면 전체 train corpus) |
+| vocab_size | 3000 |
+| context_length | 128 |
+| 주요 고정 config | batch_size, emb_dim, n_heads, n_layers, drop_rate, learning_rate |
+| train loss |  |
+| validation loss |  |
+| 생성 샘플 |  |
+| checkpoint 경로 |  |
+| Basic 실행을 못 한 경우 사유 |  |
+
+### 6.3 결과
 
 | 항목 | 내용 |
 | --- | --- |

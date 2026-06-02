@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 import csv
+from datetime import datetime
 import json
 import random
 
@@ -83,6 +84,73 @@ def _write_jsonl(path: Path, data: list[dict]) -> None:
     with path.open("w", encoding="utf-8") as f:
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
+def _append_metric_jsonl(path: str | Path | None, record: dict) -> None:
+    """metric record를 JSONL 파일에 한 줄 추가합니다."""
+    if path is None:
+        return
+
+    metric_path = Path(path)
+    metric_path.parent.mkdir(parents=True, exist_ok=True)
+    with metric_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _current_lrs(optimizer: torch.optim.Optimizer) -> list[float]:
+    """optimizer parameter group별 learning rate를 반환합니다."""
+    return [float(group.get("lr", float("nan"))) for group in optimizer.param_groups]
+
+
+def _format_step_path(
+    ckpt_dir: Path,
+    experiment_id: str,
+    run_date: str,
+    global_step: int,
+    suffix: str,
+) -> Path:
+    """step 기반 checkpoint 파일명을 만듭니다."""
+    return ckpt_dir / f"{experiment_id}_{run_date}_step{global_step:04d}_{suffix}.pt"
+
+
+def _cleanup_old_checkpoints(paths: list[Path], keep_latest: int) -> list[Path]:
+    """최근 checkpoint path만 남기고 오래된 파일을 삭제합니다."""
+    if keep_latest <= 0:
+        for path in paths:
+            path.unlink(missing_ok=True)
+        return []
+
+    keep = paths[-keep_latest:]
+    for path in paths[:-keep_latest]:
+        path.unlink(missing_ok=True)
+    return keep
+
+
+def _save_sentiment_checkpoint(
+    model: "GPTForSequenceClassification",
+    optimizer: torch.optim.Optimizer,
+    epoch: int,
+    global_step: int,
+    path: str | Path,
+    *,
+    experiment_id: str,
+    best_val_loss: float,
+    best_val_acc: float,
+    extra_state: dict | None = None,
+) -> None:
+    """감성 분류 model/optimizer 상태와 학습 위치를 저장합니다."""
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "epoch": epoch,
+        "global_step": global_step,
+        "experiment_id": experiment_id,
+        "best_val_loss": best_val_loss,
+        "best_val_acc": best_val_acc,
+        "config": model.gpt.config,
+        "extra_state": extra_state or {},
+    }
+    torch.save(checkpoint, Path(path))
 
 
 class ReviewSentimentDataset(Dataset):
@@ -286,3 +354,269 @@ def evaluate_sentiment(
     finally:
         if was_training:
             model.train()
+
+
+def train_sentiment_model(
+    model: GPTForSequenceClassification,
+    train_loader,
+    val_loader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    num_epochs: int,
+    *,
+    experiment_id: str,
+    run_date: str,
+    ckpt_dir: str | Path,
+    metrics_path: str | Path | None = None,
+    log_every_steps: int | None = None,
+    eval_every_steps: int | None = None,
+    save_every_steps: int | None = None,
+    keep_latest: int = 2,
+    start_epoch: int = 0,
+    global_step: int = 0,
+    grad_clip_norm: float | None = None,
+    extra_state: dict | None = None,
+) -> dict:
+    """감성 분류 fine-tuning을 step 단위 metric/checkpoint 저장과 함께 실행합니다.
+
+    D0/D2/D3 후보는 validation loss로만 비교하고, test 평가는 runner의 D4 단계에서
+    선택된 best checkpoint에 대해서만 수행합니다.
+    """
+    if num_epochs < start_epoch:
+        raise ValueError("num_epochs must be greater than or equal to start_epoch.")
+    if len(train_loader) == 0:
+        raise ValueError("train_loader must contain at least one batch.")
+    if len(val_loader) == 0:
+        raise ValueError("val_loader must contain at least one batch.")
+
+    checkpoint_dir = Path(ckpt_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    model.to(device)
+
+    best_val_loss = float("inf")
+    best_val_acc = 0.0
+    best_checkpoint_path: Path | None = None
+    latest_checkpoint_paths: list[Path] = []
+    last_train_loss = float("nan")
+    last_train_acc = float("nan")
+    last_val_loss = float("nan")
+    last_val_acc = float("nan")
+
+    _append_metric_jsonl(
+        metrics_path,
+        {
+            "event": "run_start",
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "experiment_id": experiment_id,
+            "run_date": run_date,
+            "start_epoch": start_epoch,
+            "global_step": global_step,
+        },
+    )
+
+    for epoch in range(start_epoch, num_epochs):
+        model.train()
+        total_loss = 0.0
+        total_correct = 0
+        total_examples = 0
+
+        for batch_idx, (input_ids, labels) in enumerate(train_loader, start=1):
+            input_ids = input_ids.to(device)
+            labels = labels.to(device).long()
+
+            optimizer.zero_grad()
+            loss, logits = model(input_ids, labels=labels)
+            loss.backward()
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+            optimizer.step()
+
+            batch_size = input_ids.size(0)
+            total_loss += loss.item() * batch_size
+            preds = logits.argmax(dim=-1)
+            total_correct += (preds == labels).sum().item()
+            total_examples += batch_size
+            global_step += 1
+
+            running_loss = total_loss / total_examples
+            running_acc = total_correct / total_examples
+
+            if log_every_steps is not None and log_every_steps > 0 and global_step % log_every_steps == 0:
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "train_step",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch,
+                        "batch_idx": batch_idx,
+                        "global_step": global_step,
+                        "train_loss": running_loss,
+                        "train_acc": running_acc,
+                        "lrs": _current_lrs(optimizer),
+                    },
+                )
+
+            if eval_every_steps is not None and eval_every_steps > 0 and global_step % eval_every_steps == 0:
+                val_loss, val_acc = evaluate_sentiment(model, val_loader, device)
+                last_val_loss = val_loss
+                last_val_acc = val_acc
+                improved = val_loss < best_val_loss
+                if improved:
+                    old_best = best_checkpoint_path
+                    best_val_loss = val_loss
+                    best_val_acc = val_acc
+                    best_checkpoint_path = _format_step_path(
+                        checkpoint_dir,
+                        experiment_id,
+                        run_date,
+                        global_step,
+                        "best",
+                    )
+                    _save_sentiment_checkpoint(
+                        model,
+                        optimizer,
+                        epoch + 1,
+                        global_step,
+                        best_checkpoint_path,
+                        experiment_id=experiment_id,
+                        best_val_loss=best_val_loss,
+                        best_val_acc=best_val_acc,
+                        extra_state=extra_state,
+                    )
+                    if old_best is not None and old_best != best_checkpoint_path:
+                        old_best.unlink(missing_ok=True)
+
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "eval",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch,
+                        "global_step": global_step,
+                        "val_loss": val_loss,
+                        "val_acc": val_acc,
+                        "best_val_loss": best_val_loss,
+                        "best_val_acc": best_val_acc,
+                        "improved": improved,
+                        "checkpoint_path": str(best_checkpoint_path) if improved else None,
+                    },
+                )
+
+            if save_every_steps is not None and save_every_steps > 0 and global_step % save_every_steps == 0:
+                latest_checkpoint_path = _format_step_path(
+                    checkpoint_dir,
+                    experiment_id,
+                    run_date,
+                    global_step,
+                    "latest",
+                )
+                _save_sentiment_checkpoint(
+                    model,
+                    optimizer,
+                    epoch + 1,
+                    global_step,
+                    latest_checkpoint_path,
+                    experiment_id=experiment_id,
+                    best_val_loss=best_val_loss,
+                    best_val_acc=best_val_acc,
+                    extra_state=extra_state,
+                )
+                latest_checkpoint_paths.append(latest_checkpoint_path)
+                latest_checkpoint_paths = _cleanup_old_checkpoints(
+                    latest_checkpoint_paths,
+                    keep_latest=keep_latest,
+                )
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "checkpoint",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch,
+                        "global_step": global_step,
+                        "checkpoint_type": "latest",
+                        "checkpoint_path": str(latest_checkpoint_path),
+                        "kept_latest": [str(path) for path in latest_checkpoint_paths],
+                    },
+                )
+
+        if total_examples == 0:
+            raise ValueError("train_loader must contain at least one batch.")
+
+        last_train_loss = total_loss / total_examples
+        last_train_acc = total_correct / total_examples
+        last_val_loss, last_val_acc = evaluate_sentiment(model, val_loader, device)
+        improved = last_val_loss < best_val_loss
+        if improved:
+            old_best = best_checkpoint_path
+            best_val_loss = last_val_loss
+            best_val_acc = last_val_acc
+            best_checkpoint_path = _format_step_path(
+                checkpoint_dir,
+                experiment_id,
+                run_date,
+                global_step,
+                "best",
+            )
+            _save_sentiment_checkpoint(
+                model,
+                optimizer,
+                epoch + 1,
+                global_step,
+                best_checkpoint_path,
+                experiment_id=experiment_id,
+                best_val_loss=best_val_loss,
+                best_val_acc=best_val_acc,
+                extra_state=extra_state,
+            )
+            if old_best is not None and old_best != best_checkpoint_path:
+                old_best.unlink(missing_ok=True)
+
+        _append_metric_jsonl(
+            metrics_path,
+            {
+                "event": "epoch_end",
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "experiment_id": experiment_id,
+                "epoch": epoch + 1,
+                "global_step": global_step,
+                "train_loss": last_train_loss,
+                "train_acc": last_train_acc,
+                "val_loss": last_val_loss,
+                "val_acc": last_val_acc,
+                "best_val_loss": best_val_loss,
+                "best_val_acc": best_val_acc,
+                "best_checkpoint_path": str(best_checkpoint_path) if best_checkpoint_path else None,
+                "improved": improved,
+            },
+        )
+
+    if best_checkpoint_path is None:
+        raise RuntimeError("training finished without saving a best checkpoint.")
+
+    summary = {
+        "experiment_id": experiment_id,
+        "train_loss": last_train_loss,
+        "train_acc": last_train_acc,
+        "last_val_loss": last_val_loss,
+        "last_val_acc": last_val_acc,
+        "best_val_loss": best_val_loss,
+        "best_val_acc": best_val_acc,
+        "best_checkpoint_path": str(best_checkpoint_path),
+        "latest_checkpoint_paths": [str(path) for path in latest_checkpoint_paths],
+        "final_global_step": global_step,
+        "completed_epochs": num_epochs,
+    }
+
+    _append_metric_jsonl(
+        metrics_path,
+        {
+            "event": "run_end",
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            **summary,
+        },
+    )
+
+    return summary
