@@ -79,19 +79,18 @@ C는 context_length 자체를 비교하므로 `64` 결과는 1차 screening 기�
 
 | 항목 | 선택값 | 선택 이유 | 기준 metric |
 | --- | --- | --- | --- |
-| best context_length |  |  |  |
-| best n_layers |  |  |  |
-| best emb_dim |  |  |  |
+| best context_length | 64 | 128보다 best validation loss가 낮음 | best val loss 7.2248 |
+| best n_layers | 4 | 1, 2 layers보다 best validation loss가 낮음 | best val loss 7.1540 |
+| best emb_dim | 192 | 64, 128보다 best validation loss가 낮고 전체 C 실험 중 최저 loss 기록 | best val loss 6.8935 |
 
 ## 7. 실패 또는 중단 실험
 
 | 실험 ID | 원인 | 조치 | 보존 로그 |
 | --- | --- | --- | --- |
-|  |  |  |  |
+| 없음 | - | - | - |
 
 ## 8. 최종 결론
 
-```text
-모델을 키웠을 때 얻은 성능 이득과 학습 시간 증가를 비교하고,
-발표에 사용할 최종 구조 후보를 적는다.
-```
+C 실험에서는 context_length, n_layers, emb_dim을 각각 변경해 모델 구조가 validation loss에 미치는 영향을 비교했다. context_length 비교에서는 64가 128보다 낮은 best validation loss를 보였고, n_layers 비교에서는 4 layers가 가장 낮은 loss를 기록했다. emb_dim 비교에서는 192가 가장 좋은 결과를 보였으며, 전체 C 실험 중에서도 C3_dim192가 best val loss 6.8935로 가장 우수했다.
+
+따라서 독립 비교 기준의 최종 구조 후보는 `context_length=64`, `n_layers=4`, `emb_dim=192`이다. C1, C2, C3는 한 번에 하나의 변수만 바꾼 실험이므로, 최종 보고서에서는 각 변수별 비교 결과를 근거로 구조 후보를 제안한다.
