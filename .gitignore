@@ -34,6 +34,7 @@ htmlcov/
 *.pt
 *.pth
 checkpoints/
+results/
 
 # 실험 런타임 산출물
 /experiment_outputs/
@@ -42,6 +43,7 @@ checkpoints/
 /metrics/
 /plots/
 /tokenizers/
+/wandb/
 *.out
 *.log
 
