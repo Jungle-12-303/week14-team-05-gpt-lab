@@ -2,6 +2,8 @@
 """GPT 사전 학습 유틸리티 과제 템플릿."""
 
 import math
+from datetime import date
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import torch
@@ -246,18 +248,33 @@ def train_model(
     ckpt_freq: int | None = None,
     start_epoch: int = 0,
     global_step: int = 0,
+    ckpt_dir: str | Path = "checkpoints",
+    experiment_id: str = "EXP",
+    run_date: str | None = None,
+    history: dict | None = None,
 ) -> list[float]:
     """사전 학습 루프 실행 후 epoch별 평균 train loss 반환.
 
     num_epochs는 전체 목표 epoch 수이고, start_epoch는 다음에 시작할 epoch입니다.
     checkpoint의 epoch 값도 재개할 다음 epoch을 뜻합니다.
     ckpt_freq는 epoch 단위 checkpoint 저장 주기입니다.
+    best checkpoint는 {실험ID}_{날짜}_best.pt 형식으로 저장합니다.
     """
     if num_epochs < start_epoch:
         raise ValueError("num_epochs must be greater than or equal to start_epoch.")
 
     # epoch가 끝날 때마다 평균 train loss를 저장할 리스트.
     train_losses: list[float] = []
+    # 실험 비교용 validation loss는 epoch 단위로 별도 누적한다.
+    val_losses: list[float] = []
+    best_val_loss = float("inf")
+    ckpt_dir = Path(ckpt_dir)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    if not experiment_id:
+        raise ValueError("experiment_id must be a non-empty string.")
+    if run_date is None:
+        run_date = date.today().strftime("%Y%m%d")
+    best_checkpoint_path = ckpt_dir / f"{experiment_id}_{run_date}_best.pt"
 
     # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
     model.to(device)
@@ -301,6 +318,20 @@ def train_model(
         avg_epoch_loss = epoch_loss / batches_seen if batches_seen > 0 else float("nan")
         train_losses.append(avg_epoch_loss)
 
+        # 실험 비교를 위해 epoch 종료 시점의 validation loss를 기록한다.
+        val_loss = calc_loss_loader(val_loader, model, device)
+        val_losses.append(val_loss)
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            save_checkpoint(
+                model,
+                optimizer,
+                epoch=epoch + 1,
+                global_step=global_step,
+                path=str(best_checkpoint_path),
+            )
+
         completed_epoch = epoch + 1
         if ckpt_freq is not None and ckpt_freq > 0 and completed_epoch % ckpt_freq == 0:
             save_checkpoint(
@@ -308,8 +339,13 @@ def train_model(
                 optimizer,
                 epoch=completed_epoch,
                 global_step=global_step,
-                path=f"checkpoint_epoch_{completed_epoch}.pt",
+                path=str(ckpt_dir / f"checkpoint_epoch_{completed_epoch}.pt"),
             )
+
+        print(
+            f"epoch {completed_epoch}: train loss {avg_epoch_loss:.4f}, "
+            f"val loss {val_loss:.4f}, best val loss {best_val_loss:.4f}"
+        )
 
         # tokenizer와 시작 문장이 있으면 현재 모델의 샘플 생성 결과 확인.
         if tokenizer is not None and start_context:
@@ -320,6 +356,13 @@ def train_model(
                 start_context,
                 context_size=getattr(model, "config", {}).get("context_length", 256),
             )
+
+    if history is not None:
+        history["train_losses"] = train_losses.copy()
+        history["val_losses"] = val_losses.copy()
+        history["best_val_loss"] = best_val_loss
+        history["best_checkpoint_path"] = str(best_checkpoint_path)
+        history["final_global_step"] = global_step
 
     # epoch별 평균 train loss 목록 반환.
     return train_losses
