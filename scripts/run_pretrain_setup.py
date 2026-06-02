@@ -3,7 +3,7 @@
 
 from src.experiment_config import BASE_CONFIG, DEFAULT_TOKENIZER_NAME
 from src.experiment_utils import (
-    encode_pretrain_corpus,
+    load_or_encode_pretrain_corpus,
     load_or_train_tokenizer,
     load_pretrain_texts,
 )
@@ -30,11 +30,23 @@ def main() -> None:
     print("vocab_size:", tokenizer.vocab_size)
     print("num_merges:", len(tokenizer.merges))
 
-    train_token_ids, val_token_ids = encode_pretrain_corpus(
+    (
+        train_token_ids,
+        val_token_ids,
+        train_ids_path,
+        val_ids_path,
+        ids_were_encoded,
+    ) = load_or_encode_pretrain_corpus(
         tokenizer,
         train_text,
         val_text,
+        vocab_size=BASE_CONFIG["vocab_size"],
+        tokenizer_name=TOKENIZER_NAME,
     )
+
+    print("train ids path:", train_ids_path)
+    print("val ids path:", val_ids_path)
+    print("token ids encoded now:", ids_were_encoded)
 
     print("train token_ids ready")
     print("train num_tokens:", len(train_token_ids))

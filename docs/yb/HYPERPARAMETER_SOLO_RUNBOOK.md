@@ -174,7 +174,7 @@ from src.experiment_config import (
     SMOKE_CONFIG,
 )
 from src.experiment_utils import (
-    encode_pretrain_corpus,
+    load_or_encode_pretrain_corpus,
     load_or_train_tokenizer,
     load_pretrain_texts,
 )
@@ -240,11 +240,24 @@ print("trained_now:", was_trained)
 print("vocab_size:", tokenizer.vocab_size)
 print("num_merges:", len(tokenizer.merges))
 
-train_token_ids, val_token_ids = encode_pretrain_corpus(
+(
+    train_token_ids,
+    val_token_ids,
+    train_ids_path,
+    val_ids_path,
+    ids_were_encoded,
+) = load_or_encode_pretrain_corpus(
     tokenizer,
     train_text,
     val_text,
+    vocab_size=base_config["vocab_size"],
+    tokenizer_name=TOKENIZER_NAME,
+    output_dir="tokenizers",
 )
+
+print("train_ids_path:", train_ids_path)
+print("val_ids_path:", val_ids_path)
+print("token_ids_encoded_now:", ids_were_encoded)
 ```
 
 ### 6.3 dataloader / model / optimizer 셀
