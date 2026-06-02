@@ -30,8 +30,11 @@ EXPERIMENTS = [
     },
     {
         "id": "A2",
-        "change": "gradient clipping",
-        "overrides": {"grad_clip_norm": 1.0},
+        "change": "gradient clipping, Basic context",
+        "overrides": {
+            "context_length": 128,
+            "grad_clip_norm": 1.0,
+        },
     },
     {
         "id": "A3",
