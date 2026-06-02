@@ -132,6 +132,12 @@ def add_common_args(
     parser.add_argument("--wandb-project", default="gpt-lab-pretrain")
     parser.add_argument("--wandb-entity", default=None)
     parser.add_argument(
+        "--wandb-dir",
+        type=Path,
+        default=None,
+        help="Directory for W&B offline files. Defaults beside the experiment output root.",
+    )
+    parser.add_argument(
         "--wandb-mode",
         choices=["online", "offline", "disabled"],
         default="offline",
@@ -313,6 +319,17 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def default_wandb_dir(output_root: Path) -> Path:
+    output_root = output_root.resolve()
+    if output_root.name == "pretrain" and output_root.parent.name == "experiment_outputs":
+        return output_root.parent.parent / "wandb"
+    return output_root.parent / "wandb"
+
+
+def planned_wandb_dir(args: argparse.Namespace) -> Path:
+    return (args.wandb_dir or default_wandb_dir(args.output_root)).resolve()
+
+
 def init_wandb(args: argparse.Namespace, *, run_name: str, run_config: dict):
     if not args.wandb:
         return None
@@ -323,13 +340,15 @@ def init_wandb(args: argparse.Namespace, *, run_name: str, run_config: dict):
             "wandb is not installed. Run `pip install -r requirements.txt` or disable --wandb."
         ) from exc
 
+    wandb_dir = planned_wandb_dir(args)
+    wandb_dir.mkdir(parents=True, exist_ok=True)
     return wandb.init(
         project=args.wandb_project,
         entity=args.wandb_entity,
         name=run_name,
         mode=args.wandb_mode,
         config=run_config,
-        dir=str(ROOT),
+        dir=str(wandb_dir),
     )
 
 
@@ -398,6 +417,7 @@ def _run_one_experiment_logged(
     device = choose_device(args)
     tokenizer_path = planned_tokenizer_path(args, dirs["output"])
     metrics_path = dirs["metrics"] / f"{experiment['id']}_{args.date}_metrics.jsonl"
+    wandb_dir = planned_wandb_dir(args)
 
     if args.dry_run:
         model_config = {
@@ -424,6 +444,12 @@ def _run_one_experiment_logged(
             "output_dir": str(dirs["output"]),
             "metrics_path": str(metrics_path),
             "log_path": str(log_path),
+            "wandb": {
+                "enabled": args.wandb,
+                "project": args.wandb_project,
+                "mode": args.wandb_mode,
+                "dir": str(wandb_dir),
+            },
             "env": collect_env(device),
             "dry_run": True,
         }
@@ -437,6 +463,7 @@ def _run_one_experiment_logged(
             "output_dir": str(dirs["output"]),
             "metrics_path": str(metrics_path),
             "log_path": str(log_path),
+            "wandb_dir": str(wandb_dir),
             "tokenizer_path": str(tokenizer_path),
             "best_checkpoint_path": None,
             "latest_checkpoint_paths": [],
@@ -517,6 +544,12 @@ def _run_one_experiment_logged(
         "output_dir": str(dirs["output"]),
         "metrics_path": str(metrics_path),
         "log_path": str(log_path),
+        "wandb": {
+            "enabled": args.wandb,
+            "project": args.wandb_project,
+            "mode": args.wandb_mode,
+            "dir": str(wandb_dir),
+        },
         "env": collect_env(device),
         "dry_run": args.dry_run,
     }
@@ -567,6 +600,7 @@ def _run_one_experiment_logged(
         "output_dir": str(dirs["output"]),
         "metrics_path": str(metrics_path),
         "log_path": str(log_path),
+        "wandb_dir": str(wandb_dir),
         "tokenizer_path": str(tokenizer_path),
         "best_checkpoint_path": history.get("best_checkpoint_path"),
         "latest_checkpoint_paths": history.get("latest_checkpoint_paths", []),
