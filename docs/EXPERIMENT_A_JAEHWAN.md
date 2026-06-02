@@ -72,7 +72,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A0 | quick smoke baseline, shared BPE vocab3000, W&B offline | 40 | 8.0831 | 8.1491 | 0.07 min | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/checkpoints/A0_20260602_step0040_best.pt` | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/metrics/A0_20260602_metrics.jsonl` | 실행 확인 완료, 공식 비교 제외 |
 | A0_basic | Basic submission baseline, shared BPE vocab3000, W&B offline | 1574 | 6.7148 | 7.0854 | 13.81 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/checkpoints/A0_basic_20260602_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/metrics/A0_basic_20260602_metrics.jsonl` | Basic 기준 baseline 확보 |
-| A1 | warmup + cosine decay, shared BPE vocab3000, W&B offline | 3146 | 7.1338 | 7.1858 | 13.99 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260602_JAEHWAN/checkpoints/A1_20260602_step3146_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260602_JAEHWAN/metrics/A1_20260602_metrics.jsonl` | 기존 실행은 context_length=64 기준으로 추정되어 A0_basic과 직접 비교 제외, 수정 설정으로 재실행 필요 |
+| A1 | warmup + cosine decay, Basic context, min lr floor, shared BPE vocab3000, W&B offline | 1574 | 7.2470 | 7.2717 | 13.47 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/checkpoints/A1_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/metrics/A1_20260603_metrics.jsonl` | A0_basic 대비 val loss 악화, 최종 후보 제외 |
 | A2 | gradient clipping |  |  |  |  |  |  |  |
 | A3 | weight_decay=0.01 |  |  |  |  |  |  |  |
 | A4 | combined |  |  |  |  |  |  |  |
@@ -101,8 +101,8 @@
 | A0_basic | 1400 | 2 | 6.8452 | 6.8968 | `A0_basic_20260602_step1400_latest.pt` | latest checkpoint |
 | A0_basic | 1500 | 2 | 6.7438 | 6.7979 | `A0_basic_20260602_step1500_latest.pt` | latest checkpoint |
 | A0_basic | 1574 | 2 | 7.0854 | 6.7148 | `A0_basic_20260602_step1574_best.pt` | best val loss, epoch 2 end |
-| A1 | 3100 | 2 | 7.1306 | 7.1383 | `A1_20260602_step3100_best.pt` | eval, learning_rate 1.87e-7 |
-| A1 | 3146 | 2 | 7.1858 | 7.1338 | `A1_20260602_step3146_best.pt` | best val loss, epoch 2 end, learning_rate 0.0 |
+| A1 | 1500 | 2 | 7.2523 | 7.2516 | `A1_20260603_step1500_best.pt` | eval, learning_rate 3.15e-5 |
+| A1 | 1574 | 2 | 7.2717 | 7.2470 | `A1_20260603_step1574_best.pt` | best val loss, epoch 2 end, learning_rate 3.00e-5 |
 | A2 |  |  |  |  |  |  |
 | A3 |  |  |  |  |  |  |
 | A4 |  |  |  |  |  |  |
@@ -111,7 +111,7 @@
 
 | 실험 ID | 원인 | 조치 | 보존 로그 |
 | --- | --- | --- | --- |
-|  |  |  |  |
+| A1_20260602 | `context_length=64` 기준으로 추정되어 A0_basic(`context_length=128`)과 직접 비교 불가. 후반 learning rate도 0.0까지 감소 | A1을 `context_length=128`, `warmup_steps=50`, `min_lr_ratio=0.1`로 수정 후 `A1_20260603_JAEHWAN` 재실행 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260602_JAEHWAN/logs/A1_20260602.out` |
 
 ## 8. 최종 결론
 
@@ -119,4 +119,6 @@ A0_basic을 Basic 제출 기준 baseline으로 확보했다. `vocab_size=3000`, 
 
 epoch 1 종료 시 validation loss는 7.2747이었고, epoch 2 종료 시 6.7148까지 낮아졌다. 이후 A1~A4 안정화 실험은 이 A0_basic 결과를 기준선으로 삼아 validation loss 개선 여부와 loss spike/NaN 발생 여부를 비교한다.
 
-A1 기존 실행은 `context_length=64` 기준으로 돈 것으로 확인되어 `context_length=128`인 A0_basic과 직접 비교하기 어렵다. 또한 후반 learning rate가 0.0까지 감소했고, 2 epoch 짧은 학습에서 초반 10% warmup이 constant LR baseline보다 수렴을 늦췄을 가능성이 있다. 따라서 기존 A1 수치는 실패 원인 분석용으로만 남기고, A1은 `context_length=128`, `warmup_steps=50`, `min_lr_ratio=0.1` 설정으로 재실행해 Basic 기준에서 scheduler 효과만 다시 비교한다.
+A1은 기존 실행의 비교 조건 문제를 보정하기 위해 `context_length=128`, `warmup_steps=50`, `min_lr_ratio=0.1`로 재실행했다. 이번 재실행은 A0_basic과 같은 final global step 1574에서 종료되었고, 마지막 learning rate도 3.00e-5로 유지되어 Basic 기준과 scheduler floor가 정상 적용되었다.
+
+그러나 A1 재실행의 best validation loss는 7.2470으로 A0_basic의 6.7148보다 0.5322 높았다. 따라서 현재 warmup + cosine decay 설정은 validation loss 개선에 실패했으므로 최종 안정화 후보에서 제외한다. 이 결과는 warmup + cosine 자체의 일반적 실패라기보다, 현재 2 epoch 학습 길이와 `warmup_steps=50`, `min_lr_ratio=0.1` 조합이 baseline constant learning rate보다 유리하지 않았다는 근거로 해석한다.
