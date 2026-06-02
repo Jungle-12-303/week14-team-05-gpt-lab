@@ -66,8 +66,8 @@ C는 context_length 자체를 비교하므로 `64` 결과는 1차 screening 기�
 
 | 실험 ID | 변경 변수 | 값 | best global_step | best val loss | final train loss | 소요 시간 | 메모리/OOM | best checkpoint | metric JSONL | 결론 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | context_length | 64 |  |  |  |  |  |  |  |  |
-| C1 | context_length | 128 |  |  |  |  |  |  |  |  |
+| C1 | context_length | 64 | 1144 | 7.2248 | 7.2784 | 5.9분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C1_ctx64_20260602_BEOMSANG/checkpoints/C1_ctx64_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C1_ctx64_20260602_BEOMSANG/metrics/C1_ctx64_20260602_metrics.jsonl` | keep |
+| C1 | context_length | 128 | 572 | 7.2879 | 7.2996 | 5.6분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C1_ctx128_20260602_BEOMSANG/checkpoints/C1_ctx128_20260602_step0572_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C1_ctx128_20260602_BEOMSANG/metrics/C1_ctx128_20260602_metrics.jsonl` | keep |
 | C2 | n_layers | 1 |  |  |  |  |  |  |  |  |
 | C2 | n_layers | 2 |  |  |  |  |  |  |  |  |
 | C2 | n_layers | 4 |  |  |  |  |  |  |  |  |
