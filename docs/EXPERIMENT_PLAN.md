@@ -33,6 +33,39 @@
 | num_epochs | 2~3 |
 | eval 기준 | 동일한 eval_freq, eval_iter 사용 |
 
+공통으로 맞춰야 할 기준 변수는 아래 설정을 사용한다. 각 담당자는 실험에서 바꾸는 변수만 명시적으로 변경하고, 나머지 값은 이 기준을 유지한다.
+
+```python
+BASE_CONFIG = {
+    "vocab_size": 3000,
+    "context_length": 64,
+    "emb_dim": 128,
+    "n_heads": 4,
+    "n_layers": 2,
+    "drop_rate": 0.1,
+    "qkv_bias": False,
+}
+
+TRAIN_CONFIG = {
+    "seed": 42,
+    "batch_size": 8,
+    "learning_rate": 3e-4,
+    "weight_decay": 0.0,
+    "num_epochs": 2,
+    "eval_freq": 100,
+    "eval_iter": 10,
+    "start_context": "영화",
+}
+
+SMOKE_CONFIG = {
+    **TRAIN_CONFIG,
+    "batch_size": 2,
+    "num_epochs": 1,
+    "eval_freq": 20,
+    "eval_iter": 2,
+}
+```
+
 ### 2.1 Colab 환경 통일 방법
 
 Colab은 같은 GPU가 항상 배정되지 않을 수 있으므로, 실험 시작 전에 환경을 확인하고 기록한다. 가능한 경우 4명 모두 같은 GPU와 같은 Python major/minor 버전에서 실행한다.
@@ -220,8 +253,9 @@ D는 최종 단계에서 A/B/C가 제출한 best pretrain checkpoint를 사용�
 | --- | --- |
 | num_epochs | 1 |
 | batch_size | 2 |
-| context_length | 32 또는 64 |
-| eval_iter | 작게 설정 |
+| context_length | 64 |
+| eval_freq | 20 |
+| eval_iter | 2 |
 
 ### 7.2 1차 screening
 
