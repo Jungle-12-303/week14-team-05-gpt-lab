@@ -2,6 +2,7 @@
 """GPT 사전 학습 유틸리티 과제 템플릿."""
 
 import math
+from datetime import date
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -247,7 +248,9 @@ def train_model(
     ckpt_freq: int | None = None,
     start_epoch: int = 0,
     global_step: int = 0,
-    ckpt_dir: str | Path = ".",
+    ckpt_dir: str | Path = "checkpoints",
+    experiment_id: str = "EXP",
+    run_date: str | None = None,
     history: dict | None = None,
 ) -> list[float]:
     """사전 학습 루프 실행 후 epoch별 평균 train loss 반환.
@@ -255,6 +258,7 @@ def train_model(
     num_epochs는 전체 목표 epoch 수이고, start_epoch는 다음에 시작할 epoch입니다.
     checkpoint의 epoch 값도 재개할 다음 epoch을 뜻합니다.
     ckpt_freq는 epoch 단위 checkpoint 저장 주기입니다.
+    best checkpoint는 {실험ID}_{날짜}_best.pt 형식으로 저장합니다.
     """
     if num_epochs < start_epoch:
         raise ValueError("num_epochs must be greater than or equal to start_epoch.")
@@ -266,7 +270,11 @@ def train_model(
     best_val_loss = float("inf")
     ckpt_dir = Path(ckpt_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    best_checkpoint_path = ckpt_dir / "best.pt"
+    if not experiment_id:
+        raise ValueError("experiment_id must be a non-empty string.")
+    if run_date is None:
+        run_date = date.today().strftime("%Y%m%d")
+    best_checkpoint_path = ckpt_dir / f"{experiment_id}_{run_date}_best.pt"
 
     # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
     model.to(device)
