@@ -287,6 +287,9 @@ def make_scheduler(optimizer: torch.optim.Optimizer, config: dict, total_steps: 
         return None
 
     warmup_steps = int(config.get("warmup_steps") or max(1, total_steps // 10))
+    min_lr_ratio = float(config.get("min_lr_ratio", 0.0))
+    if not 0.0 <= min_lr_ratio < 1.0:
+        raise ValueError("min_lr_ratio must be in [0.0, 1.0).")
     total_steps = max(total_steps, warmup_steps + 1)
 
     def lr_lambda(step: int) -> float:
@@ -294,7 +297,8 @@ def make_scheduler(optimizer: torch.optim.Optimizer, config: dict, total_steps: 
         if current_step <= warmup_steps:
             return current_step / warmup_steps
         progress = (current_step - warmup_steps) / max(1, total_steps - warmup_steps)
-        return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+        cosine_ratio = 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+        return min_lr_ratio + (1.0 - min_lr_ratio) * cosine_ratio
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 

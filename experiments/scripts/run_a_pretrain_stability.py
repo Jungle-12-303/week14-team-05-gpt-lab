@@ -20,8 +20,13 @@ EXPERIMENTS = [
     },
     {
         "id": "A1",
-        "change": "warmup + cosine decay",
-        "overrides": {"scheduler": "warmup_cosine"},
+        "change": "warmup + cosine decay, Basic context, min lr floor",
+        "overrides": {
+            "context_length": 128,
+            "scheduler": "warmup_cosine",
+            "warmup_steps": 50,
+            "min_lr_ratio": 0.1,
+        },
     },
     {
         "id": "A2",
