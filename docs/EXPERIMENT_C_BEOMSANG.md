@@ -71,9 +71,9 @@ C는 context_length 자체를 비교하므로 `64` 결과는 1차 screening 기�
 | C2 | n_layers | 1 | 1144 | 7.2354 | 7.2793 | 5.7분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers1_20260602_BEOMSANG/checkpoints/C2_layers1_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers1_20260602_BEOMSANG/metrics/C2_layers1_20260602_metrics.jsonl` | keep |
 | C2 | n_layers | 2 | 1144 | 7.2248 | 7.2784 | 5.7분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers2_20260602_BEOMSANG/checkpoints/C2_layers2_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers2_20260602_BEOMSANG/metrics/C2_layers2_20260602_metrics.jsonl` | keep |
 | C2 | n_layers | 4 | 1144 | 7.1540 | 7.2627 | 5.8분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers4_20260602_BEOMSANG/checkpoints/C2_layers4_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C2_layers4_20260602_BEOMSANG/metrics/C2_layers4_20260602_metrics.jsonl` | keep |
-| C3 | emb_dim | 64 |  |  |  |  |  |  |  |  |
-| C3 | emb_dim | 128 |  |  |  |  |  |  |  |  |
-| C3 | emb_dim | 192 |  |  |  |  |  |  |  |  |
+| C3 | emb_dim | 64 | 1144 | 7.2933 | 7.3021 | 5.7분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim64_20260602_BEOMSANG/checkpoints/C3_dim64_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim64_20260602_BEOMSANG/metrics/C3_dim64_20260602_metrics.jsonl` | keep |
+| C3 | emb_dim | 128 | 1144 | 7.2248 | 7.2784 | 5.8분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim128_20260602_BEOMSANG/checkpoints/C3_dim128_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim128_20260602_BEOMSANG/metrics/C3_dim128_20260602_metrics.jsonl` | keep |
+| C3 | emb_dim | 192 | 1144 | 6.8935 | 7.1465 | 5.9분 | 없음 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim192_20260602_BEOMSANG/checkpoints/C3_dim192_20260602_step1144_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/C3_dim192_20260602_BEOMSANG/metrics/C3_dim192_20260602_metrics.jsonl` | keep |
 
 ## 6. Best 후보
 
