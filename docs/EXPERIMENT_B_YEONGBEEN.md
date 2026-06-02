@@ -24,10 +24,10 @@
 | --- | --- |
 | Colab GPU | T4 |
 | Colab runtime | GPU, Latest |
-| Python version |  |
-| PyTorch version |  |
-| CUDA version |  |
-| git commit |  |
+| Python version | 3.12.13 |
+| PyTorch version | 2.11.0+cu128 |
+| CUDA version | 12.8 |
+| git commit | `bab3567` |
 | seed | 42 |
 | 데이터 경로 | `/content/week14-team-05-gpt-lab/data/` |
 | Google Drive output root | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/{실험ID}_{YYYYMMDD}_YEONGBEEN/` |
@@ -63,6 +63,49 @@
 위 고정 설정의 `context_length=64`는 1차 screening 기준이다. 1차 screening은 `--vocab-size 2000 --train-char-limit 500000`으로 실행하고, 최종 하이퍼파라미터 후보는 가능하면 Basic 기준인 `--vocab-size 3000 --train-char-limit 1500000`으로 재확인한다. Basic 재확인을 하지 못한 경우 그 이유를 결론에 적는다.
 
 ## 5. 실험 결과
+
+### 5.1 Quick smoke 실행 확인
+
+`--quick` 옵션으로 `B2_lr3e-4` 설정을 작은 입력 규모에서 실행해 스크립트, tokenizer 로드, metric JSONL, log, checkpoint 저장 경로가 정상 동작하는지 확인했다. 이 결과는 smoke test이므로 공식 하이퍼파라미터 비교에는 사용하지 않는다.
+
+| 항목 | 값 |
+| --- | --- |
+| 실행 명령 | `run_b_hparams.py --experiment B2_lr3e-4 --quick` |
+| experiment_id | `B2_lr3e-4` |
+| 변경 변수 | learning_rate |
+| 변경값 | 0.0003 |
+| vocab_size | 300 |
+| train_char_limit / val_char_limit | 5000 / 2000 |
+| batch_size | 2 |
+| context_length | 32 |
+| n_layers / emb_dim | 1 / 64 |
+| num_epochs | 1 |
+| final_global_step | 137 |
+| best val loss | 4.602464110762985 |
+| elapsed_min | 0.04589358568191528 |
+| tokenizer | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260602_YEONGBEEN/tokenizers/nsmc_bpe_vocab300_full.json` |
+| best checkpoint | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260602_YEONGBEEN/checkpoints/B2_lr3e-4_20260602_step0137_best.pt` |
+| metric JSONL | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260602_YEONGBEEN/metrics/B2_lr3e-4_20260602_metrics.jsonl` |
+| stdout/stderr log | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/B2_lr3e-4_20260602_YEONGBEEN/logs/B2_lr3e-4_20260602.out` |
+| 결과 | 정상 완료 |
+
+실행 환경:
+
+| 항목 | 값 |
+| --- | --- |
+| Python | 3.12.13 |
+| PyTorch | 2.11.0+cu128 |
+| CUDA | 12.8 |
+| GPU | Tesla T4 |
+| git commit | `bab3567` |
+
+생성 샘플:
+
+```text
+영화��� � �설�. � 뼈! �!��읹�눰�� ���숌이�� �� �������
+```
+
+### 5.2 공식 비교 결과
 
 | 실험 ID | 변경 변수 | 값 | best global_step | best val loss | final train loss | 소요 시간 | best checkpoint | metric JSONL | 결론 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
