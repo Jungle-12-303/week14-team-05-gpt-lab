@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """GPT 사전 학습 유틸리티 과제 템플릿."""
 
+import json
 import math
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -132,6 +133,48 @@ def load_checkpoint(
     return checkpoint["epoch"], checkpoint["global_step"]
 
 
+def _append_metric_jsonl(path: str | Path | None, record: dict) -> None:
+    """metric record를 JSONL 파일에 한 줄 추가합니다."""
+    if path is None:
+        return
+
+    metric_path = Path(path)
+    metric_path.parent.mkdir(parents=True, exist_ok=True)
+    with metric_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _current_lr(optimizer: torch.optim.Optimizer) -> float:
+    """optimizer의 첫 번째 parameter group learning rate를 반환합니다."""
+    if not optimizer.param_groups:
+        return float("nan")
+    return float(optimizer.param_groups[0].get("lr", float("nan")))
+
+
+def _format_step_path(
+    ckpt_dir: Path,
+    experiment_id: str,
+    run_date: str,
+    global_step: int,
+    suffix: str,
+) -> Path:
+    """step 기반 checkpoint 파일명을 만듭니다."""
+    return ckpt_dir / f"{experiment_id}_{run_date}_step{global_step:04d}_{suffix}.pt"
+
+
+def _cleanup_old_checkpoints(paths: list[Path], keep_latest: int) -> list[Path]:
+    """최근 checkpoint path만 남기고 오래된 파일을 삭제합니다."""
+    if keep_latest <= 0:
+        for path in paths:
+            path.unlink(missing_ok=True)
+        return []
+
+    keep = paths[-keep_latest:]
+    for path in paths[:-keep_latest]:
+        path.unlink(missing_ok=True)
+    return keep
+
+
 def generate(
     model: GPTModel,
     idx: torch.Tensor,
@@ -252,13 +295,21 @@ def train_model(
     experiment_id: str = "EXP",
     run_date: str | None = None,
     history: dict | None = None,
+    log_every_steps: int | None = None,
+    save_every_steps: int | None = None,
+    keep_latest: int = 2,
+    metrics_path: str | Path | None = None,
+    grad_clip_norm: float | None = None,
+    lr_scheduler=None,
 ) -> list[float]:
     """사전 학습 루프 실행 후 epoch별 평균 train loss 반환.
 
     num_epochs는 전체 목표 epoch 수이고, start_epoch는 다음에 시작할 epoch입니다.
     checkpoint의 epoch 값도 재개할 다음 epoch을 뜻합니다.
-    ckpt_freq는 epoch 단위 checkpoint 저장 주기입니다.
-    best checkpoint는 {실험ID}_{날짜}_best.pt 형식으로 저장합니다.
+    ckpt_freq는 기존 호환용 epoch 단위 checkpoint 저장 주기입니다.
+    save_every_steps를 지정하면 step 단위 latest checkpoint를 저장합니다.
+    metrics_path를 지정하면 train/eval/checkpoint metric을 JSONL로 기록합니다.
+    best checkpoint는 validation loss가 개선될 때 step 단위 파일명으로 저장합니다.
     """
     if num_epochs < start_epoch:
         raise ValueError("num_epochs must be greater than or equal to start_epoch.")
@@ -274,7 +325,8 @@ def train_model(
         raise ValueError("experiment_id must be a non-empty string.")
     if run_date is None:
         run_date = date.today().strftime("%Y%m%d")
-    best_checkpoint_path = ckpt_dir / f"{experiment_id}_{run_date}_best.pt"
+    best_checkpoint_path: Path | None = None
+    latest_checkpoint_paths: list[Path] = []
 
     # 모델 파라미터를 학습에 사용할 CPU/GPU device로 이동.
     model.to(device)
@@ -298,20 +350,109 @@ def train_model(
 
             # loss에서 각 파라미터가 얼마나 바뀌어야 하는지 gradient 계산.
             loss.backward()
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
             # optimizer가 gradient를 사용해 실제 모델 파라미터를 한 걸음 업데이트.
             optimizer.step()
+            if lr_scheduler is not None:
+                lr_scheduler.step()
 
             epoch_loss += loss.item()
             batches_seen += 1
             global_step += 1
 
+            if log_every_steps is not None and log_every_steps > 0 and global_step % log_every_steps == 0:
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "train_step",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch + 1,
+                        "global_step": global_step,
+                        "train_loss": float(loss.item()),
+                        "learning_rate": _current_lr(optimizer),
+                    },
+                )
+
             # eval_freq마다 train/validation loss를 일부 배치 기준으로 점검.
             if eval_freq > 0 and global_step % eval_freq == 0:
                 train_loss = calc_loss_loader(train_loader, model, device, eval_iter)
                 val_loss = calc_loss_loader(val_loader, model, device, eval_iter)
+                is_best = val_loss < best_val_loss
+                checkpoint_path = None
+                if is_best:
+                    best_val_loss = val_loss
+                    if best_checkpoint_path is not None:
+                        best_checkpoint_path.unlink(missing_ok=True)
+                    best_checkpoint_path = _format_step_path(
+                        ckpt_dir,
+                        experiment_id,
+                        run_date,
+                        global_step,
+                        "best",
+                    )
+                    save_checkpoint(
+                        model,
+                        optimizer,
+                        epoch=epoch + 1,
+                        global_step=global_step,
+                        path=str(best_checkpoint_path),
+                    )
+                    checkpoint_path = str(best_checkpoint_path)
+
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "eval",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch + 1,
+                        "global_step": global_step,
+                        "train_loss": float(train_loss),
+                        "val_loss": float(val_loss),
+                        "best_val_loss": float(best_val_loss),
+                        "is_best": is_best,
+                        "checkpoint_path": checkpoint_path,
+                        "learning_rate": _current_lr(optimizer),
+                    },
+                )
                 print(
                     f"step {global_step}: train loss {train_loss:.4f}, "
                     f"val loss {val_loss:.4f}"
+                )
+
+            if save_every_steps is not None and save_every_steps > 0 and global_step % save_every_steps == 0:
+                latest_checkpoint_path = _format_step_path(
+                    ckpt_dir,
+                    experiment_id,
+                    run_date,
+                    global_step,
+                    "latest",
+                )
+                save_checkpoint(
+                    model,
+                    optimizer,
+                    epoch=epoch + 1,
+                    global_step=global_step,
+                    path=str(latest_checkpoint_path),
+                )
+                latest_checkpoint_paths.append(latest_checkpoint_path)
+                latest_checkpoint_paths = _cleanup_old_checkpoints(
+                    latest_checkpoint_paths,
+                    keep_latest=keep_latest,
+                )
+                _append_metric_jsonl(
+                    metrics_path,
+                    {
+                        "event": "checkpoint",
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                        "experiment_id": experiment_id,
+                        "epoch": epoch + 1,
+                        "global_step": global_step,
+                        "checkpoint_type": "latest",
+                        "checkpoint_path": str(latest_checkpoint_path),
+                    },
                 )
 
         # epoch 하나가 끝난 뒤 평균 loss를 계산해 기록.
@@ -324,6 +465,15 @@ def train_model(
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            if best_checkpoint_path is not None:
+                best_checkpoint_path.unlink(missing_ok=True)
+            best_checkpoint_path = _format_step_path(
+                ckpt_dir,
+                experiment_id,
+                run_date,
+                global_step,
+                "best",
+            )
             save_checkpoint(
                 model,
                 optimizer,
@@ -333,6 +483,22 @@ def train_model(
             )
 
         completed_epoch = epoch + 1
+        _append_metric_jsonl(
+            metrics_path,
+            {
+                "event": "epoch_end",
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "experiment_id": experiment_id,
+                "epoch": completed_epoch,
+                "global_step": global_step,
+                "train_loss": float(avg_epoch_loss),
+                "val_loss": float(val_loss),
+                "best_val_loss": float(best_val_loss),
+                "best_checkpoint_path": str(best_checkpoint_path) if best_checkpoint_path else None,
+                "learning_rate": _current_lr(optimizer),
+            },
+        )
+
         if ckpt_freq is not None and ckpt_freq > 0 and completed_epoch % ckpt_freq == 0:
             save_checkpoint(
                 model,
@@ -361,7 +527,8 @@ def train_model(
         history["train_losses"] = train_losses.copy()
         history["val_losses"] = val_losses.copy()
         history["best_val_loss"] = best_val_loss
-        history["best_checkpoint_path"] = str(best_checkpoint_path)
+        history["best_checkpoint_path"] = str(best_checkpoint_path) if best_checkpoint_path else None
+        history["latest_checkpoint_paths"] = [str(path) for path in latest_checkpoint_paths]
         history["final_global_step"] = global_step
 
     # epoch별 평균 train loss 목록 반환.
