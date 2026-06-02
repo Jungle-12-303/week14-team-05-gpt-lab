@@ -73,9 +73,9 @@
 | A0 | quick smoke baseline, shared BPE vocab3000, W&B offline | 40 | 8.0831 | 8.1491 | 0.07 min | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/checkpoints/A0_20260602_step0040_best.pt` | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/metrics/A0_20260602_metrics.jsonl` | 실행 확인 완료, 공식 비교 제외 |
 | A0_basic | Basic submission baseline, shared BPE vocab3000, W&B offline | 1574 | 6.7148 | 7.0854 | 13.81 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/checkpoints/A0_basic_20260602_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/metrics/A0_basic_20260602_metrics.jsonl` | Basic 기준 baseline 확보 |
 | A1 | warmup + cosine decay, Basic context, min lr floor, shared BPE vocab3000, W&B offline | 1574 | 7.2470 | 7.2717 | 13.47 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/checkpoints/A1_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/metrics/A1_20260603_metrics.jsonl` | A0_basic 대비 val loss 악화, 최종 후보 제외 |
-| A2 | gradient clipping |  |  |  |  |  |  |  |
-| A3 | weight_decay=0.01 |  |  |  |  |  |  |  |
-| A4 | combined |  |  |  |  |  |  |  |
+| A2 | gradient clipping, Basic context |  |  |  |  |  |  |  |
+| A3 | weight_decay=0.01, Basic context |  |  |  |  |  |  |  |
+| A4 | warmup + cosine + clipping + weight_decay, Basic context |  |  |  |  |  |  |  |
 
 ## 6. Step metric 기록
 

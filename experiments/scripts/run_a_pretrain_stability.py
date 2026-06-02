@@ -38,14 +38,20 @@ EXPERIMENTS = [
     },
     {
         "id": "A3",
-        "change": "weight_decay=0.01",
-        "overrides": {"weight_decay": 0.01},
+        "change": "weight_decay=0.01, Basic context",
+        "overrides": {
+            "context_length": 128,
+            "weight_decay": 0.01,
+        },
     },
     {
         "id": "A4",
-        "change": "warmup + cosine + clipping + weight_decay",
+        "change": "warmup + cosine + clipping + weight_decay, Basic context",
         "overrides": {
+            "context_length": 128,
             "scheduler": "warmup_cosine",
+            "warmup_steps": 50,
+            "min_lr_ratio": 0.1,
             "grad_clip_norm": 1.0,
             "weight_decay": 0.01,
         },
