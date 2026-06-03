@@ -95,6 +95,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Write config/output paths without training.")
     parser.add_argument("--install", action="store_true", help="Install requirements before running.")
     parser.add_argument("--skip-download", action="store_true", help="Do not run download_data.py.")
+    parser.add_argument(
+        "--experiment",
+        choices=("all", "D0", "D2", "D3"),
+        default="all",
+        help="Run all D candidates or only one validation candidate.",
+    )
     parser.add_argument("--pretrain-checkpoint", type=Path, default=None)
     parser.add_argument(
         "--pretrain-run-dir",
@@ -822,6 +828,10 @@ def write_report(
 
 def write_run_config(args: argparse.Namespace, output_dir: Path, run_date: str, metrics_path: Path) -> Path:
     config_path = output_dir / "run_config.json"
+    if args.experiment == "all":
+        candidate_policy = "D0/D2/D3 use validation only; D4 evaluates test once for selected checkpoint."
+    else:
+        candidate_policy = f"{args.experiment} only; D4 evaluates test once for that checkpoint."
     write_json(
         config_path,
         {
@@ -829,10 +839,39 @@ def write_run_config(args: argparse.Namespace, output_dir: Path, run_date: str, 
             "args": vars(args),
             "output_dir": output_dir,
             "metrics_path": metrics_path,
-            "candidate_policy": "D0/D2/D3 use validation only; D4 evaluates test once for selected checkpoint.",
+            "candidate_policy": candidate_policy,
         },
     )
     return config_path
+
+
+def selected_experiment_specs(args: argparse.Namespace) -> list[dict]:
+    specs = [
+        {
+            "experiment_id": "D0",
+            "change": "sentiment baseline",
+            "mode": "baseline",
+            "freeze": False,
+            "split_lr": False,
+        },
+        {
+            "experiment_id": "D2",
+            "change": "freeze embedding and early block(s)",
+            "mode": "freeze",
+            "freeze": True,
+            "split_lr": False,
+        },
+        {
+            "experiment_id": "D3",
+            "change": "split learning rates for backbone and classifier",
+            "mode": "split_lr",
+            "freeze": False,
+            "split_lr": True,
+        },
+    ]
+    if args.experiment == "all":
+        return specs
+    return [spec for spec in specs if spec["experiment_id"] == args.experiment]
 
 
 def write_summary(
@@ -954,9 +993,9 @@ def main() -> int:
 
     results = [
         run_experiment(
-            "D0",
-            "sentiment baseline",
-            "baseline",
+            spec["experiment_id"],
+            spec["change"],
+            spec["mode"],
             args,
             tokenizer,
             train_rows,
@@ -965,35 +1004,10 @@ def main() -> int:
             checkpoint_dir,
             metrics_path,
             run_date,
-        ),
-        run_experiment(
-            "D2",
-            "freeze embedding and early block(s)",
-            "freeze",
-            args,
-            tokenizer,
-            train_rows,
-            val_rows,
-            device,
-            checkpoint_dir,
-            metrics_path,
-            run_date,
-            freeze=True,
-        ),
-        run_experiment(
-            "D3",
-            "split learning rates for backbone and classifier",
-            "split_lr",
-            args,
-            tokenizer,
-            train_rows,
-            val_rows,
-            device,
-            checkpoint_dir,
-            metrics_path,
-            run_date,
-            split_lr=True,
-        ),
+            freeze=spec["freeze"],
+            split_lr=spec["split_lr"],
+        )
+        for spec in selected_experiment_specs(args)
     ]
 
     selected = min(results, key=lambda item: item.best_val_loss)
