@@ -22,20 +22,21 @@
 
 | 항목 | 값 |
 | --- | --- |
-| Colab GPU | T4 |
+| Colab GPU | Tesla T4 |
 | Colab runtime | GPU, Latest |
-| Python version |  |
-| PyTorch version |  |
-| CUDA version |  |
-| git commit |  |
+| Python version | 3.12.13 |
+| PyTorch version | 2.11.0+cu128 |
+| CUDA version | 12.8 |
+| git commit | 129aae3 |
 | seed | 42 |
-| 데이터 경로 | `/content/week14-team-05-gpt-lab/data/` |
+| 데이터 경로 | `/content/week14-team-05-gpt-lab/data/nsmc_lm_train.txt`, `/content/week14-team-05-gpt-lab/data/nsmc_lm_val.txt` |
 | Google Drive output root | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/{실험ID}_{YYYYMMDD}_JAEHWAN/` |
-| 공유 tokenizer 경로 | `artifacts/tokenizers/nsmc_bpe_vocab{vocab_size}_full.json` |
+| 공유 tokenizer 경로 | `artifacts/tokenizers/nsmc_bpe_vocab3000_full.json` |
 | raw metric JSONL 경로 | `{output_root}/metrics/{실험ID}_{YYYYMMDD}_metrics.jsonl` |
 | stdout/stderr log 경로 | `{output_root}/logs/{실험ID}_{YYYYMMDD}.out` |
 | latest checkpoint 경로 | `{output_root}/checkpoints/{실험ID}_{YYYYMMDD}_step{global_step}_latest.pt` |
 | best checkpoint 경로 | `{output_root}/checkpoints/{실험ID}_{YYYYMMDD}_step{global_step}_best.pt` |
+| W&B | `--wandb --wandb-mode offline`, `/content/drive/MyDrive/gpt-lab/wandb/wandb/offline-run-20260602_140926-3xiswjd9` |
 
 ## 3. 고정 설정
 
@@ -69,33 +70,59 @@
 
 | 실험 ID | 변경점 | best global_step | best val loss | final train loss | 소요 시간 | best checkpoint | metric JSONL | 결론 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A0 | screening baseline |  |  |  |  |  |  |  |
-| A0_basic | Basic submission baseline |  |  |  |  |  |  |  |
-| A1 | warmup + cosine decay |  |  |  |  |  |  |  |
-| A2 | gradient clipping |  |  |  |  |  |  |  |
-| A3 | weight_decay=0.01 |  |  |  |  |  |  |  |
-| A4 | combined |  |  |  |  |  |  |  |
+| A0 | quick smoke baseline, shared BPE vocab3000, W&B offline | 40 | 8.0831 | 8.1491 | 0.07 min | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/checkpoints/A0_20260602_step0040_best.pt` | `local/experiment_outputs/pretrain/A0_20260602_JAEHWAN/metrics/A0_20260602_metrics.jsonl` | 실행 확인 완료, 공식 비교 제외 |
+| A0_basic | Basic submission baseline, shared BPE vocab3000, W&B offline | 1574 | 6.7148 | 7.0854 | 13.81 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/checkpoints/A0_basic_20260602_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A0_basic_20260602_JAEHWAN/metrics/A0_basic_20260602_metrics.jsonl` | Basic 기준 baseline 확보 |
+| A1 | warmup + cosine decay, Basic context, min lr floor, shared BPE vocab3000, W&B offline | 1574 | 7.2470 | 7.2717 | 13.47 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/checkpoints/A1_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260603_JAEHWAN/metrics/A1_20260603_metrics.jsonl` | A0_basic 대비 val loss 악화, 최종 후보 제외 |
+| A2 | gradient clipping, Basic context | 1574 | 6.7264 | 7.0884 | 13.75 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A2_20260603_JAEHWAN/checkpoints/A2_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A2_20260603_JAEHWAN/metrics/A2_20260603_metrics.jsonl` | A0_basic 대비 0.0116 악화, 최종 후보 제외 |
+| A3 | weight_decay=0.01, Basic context | 1574 | 6.7262 | 7.0883 | 13.77 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A3_20260603_JAEHWAN/checkpoints/A3_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A3_20260603_JAEHWAN/metrics/A3_20260603_metrics.jsonl` | A0_basic 대비 0.0114 악화, 최종 후보 제외 |
+| A4 | warmup + cosine + clipping + weight_decay, Basic context | 1574 | 7.2467 | 7.2715 | 13.70 min | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A4_20260603_JAEHWAN/checkpoints/A4_20260603_step1574_best.pt` | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A4_20260603_JAEHWAN/metrics/A4_20260603_metrics.jsonl` | A0_basic 대비 0.5319 악화, 최종 후보 제외 |
 
 ## 6. Step metric 기록
 
 | 실험 ID | global_step | epoch | train loss | val loss | checkpoint | 메모 |
 | --- | --- | --- | --- | --- | --- | --- |
-| A0 |  |  |  |  |  |  |
-| A0_basic |  |  |  |  |  |  |
-| A1 |  |  |  |  |  |  |
-| A2 |  |  |  |  |  |  |
-| A3 |  |  |  |  |  |  |
-| A4 |  |  |  |  |  |  |
+| A0 | 20 | 1 | 8.0988 | 8.1016 | `A0_20260602_step0020_best.pt` | quick smoke eval |
+| A0 | 40 | 1 | 8.0696 | 8.0831 | `A0_20260602_step0040_best.pt` | best val loss |
+| A0 | 46 | 1 | 8.1491 | 8.1125 | `A0_20260602_step0040_best.pt` | epoch end |
+| A0_basic | 100 | 1 | 7.3437 | 7.3329 |  | eval |
+| A0_basic | 200 | 1 | 7.2860 | 7.3116 |  | eval |
+| A0_basic | 300 | 1 | 7.2802 | 7.3046 |  | eval |
+| A0_basic | 400 | 1 | 7.2842 | 7.3001 |  | eval |
+| A0_basic | 500 | 1 | 7.2793 | 7.2968 |  | eval |
+| A0_basic | 600 | 1 | 7.2899 | 7.2944 |  | eval |
+| A0_basic | 700 | 1 | 7.2583 | 7.2889 |  | eval |
+| A0_basic | 787 | 1 | 7.3562 | 7.2747 |  | epoch 1 end |
+| A0_basic | 800 | 2 | 7.2929 | 7.2794 |  | eval |
+| A0_basic | 900 | 2 | 7.2298 | 7.2472 |  | eval |
+| A0_basic | 1000 | 2 | 7.1773 | 7.1982 |  | eval |
+| A0_basic | 1100 | 2 | 7.1039 | 7.1389 |  | eval |
+| A0_basic | 1200 | 2 | 7.0280 | 7.0632 |  | eval |
+| A0_basic | 1300 | 2 | 6.9579 | 6.9819 |  | eval |
+| A0_basic | 1400 | 2 | 6.8452 | 6.8968 | `A0_basic_20260602_step1400_latest.pt` | latest checkpoint |
+| A0_basic | 1500 | 2 | 6.7438 | 6.7979 | `A0_basic_20260602_step1500_latest.pt` | latest checkpoint |
+| A0_basic | 1574 | 2 | 7.0854 | 6.7148 | `A0_basic_20260602_step1574_best.pt` | best val loss, epoch 2 end |
+| A1 | 1500 | 2 | 7.2523 | 7.2516 | `A1_20260603_step1500_best.pt` | eval, learning_rate 3.15e-5 |
+| A1 | 1574 | 2 | 7.2717 | 7.2470 | `A1_20260603_step1574_best.pt` | best val loss, epoch 2 end, learning_rate 3.00e-5 |
+| A2 | 1574 | 2 | 7.0884 | 6.7264 | `A2_20260603_step1574_best.pt` | best val loss, epoch 2 end |
+| A3 | 1574 | 2 | 7.0883 | 6.7262 | `A3_20260603_step1574_best.pt` | best val loss, epoch 2 end |
+| A4 | 1574 | 2 | 7.2715 | 7.2467 | `A4_20260603_step1574_best.pt` | best val loss, epoch 2 end, learning rate scheduler 적용 |
 
 ## 7. 실패 또는 중단 실험
 
 | 실험 ID | 원인 | 조치 | 보존 로그 |
 | --- | --- | --- | --- |
-|  |  |  |  |
+| A1_20260602 | `context_length=64` 기준으로 추정되어 A0_basic(`context_length=128`)과 직접 비교 불가. 후반 learning rate도 0.0까지 감소 | A1을 `context_length=128`, `warmup_steps=50`, `min_lr_ratio=0.1`로 수정 후 `A1_20260603_JAEHWAN` 재실행 | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/A1_20260602_JAEHWAN/logs/A1_20260602.out` |
 
 ## 8. 최종 결론
 
-```text
-baseline 대비 가장 효과가 있었던 안정화 기법은 무엇이고,
-validation loss와 학습 안정성이 어떻게 달라졌는지 적는다.
-```
+A0_basic을 Basic 제출 기준 baseline으로 확보했다. `vocab_size=3000`, `context_length=128`, `train_char_limit=1500000`, `num_epochs=2` 설정에서 best validation loss는 6.7148이고, best checkpoint는 final global step 1574에서 저장되었다.
+
+epoch 1 종료 시 validation loss는 7.2747이었고, epoch 2 종료 시 6.7148까지 낮아졌다. 이후 A1~A4 안정화 실험은 이 A0_basic 결과를 기준선으로 삼아 validation loss 개선 여부와 loss spike/NaN 발생 여부를 비교한다.
+
+A1은 기존 실행의 비교 조건 문제를 보정하기 위해 `context_length=128`, `warmup_steps=50`, `min_lr_ratio=0.1`로 재실행했다. 이번 재실행은 A0_basic과 같은 final global step 1574에서 종료되었고, 마지막 learning rate도 3.00e-5로 유지되어 Basic 기준과 scheduler floor가 정상 적용되었다.
+
+그러나 A1 재실행의 best validation loss는 7.2470으로 A0_basic의 6.7148보다 0.5322 높았다. 따라서 현재 warmup + cosine decay 설정은 validation loss 개선에 실패했으므로 최종 안정화 후보에서 제외한다. 이 결과는 warmup + cosine 자체의 일반적 실패라기보다, 현재 2 epoch 학습 길이와 `warmup_steps=50`, `min_lr_ratio=0.1` 조합이 baseline constant learning rate보다 유리하지 않았다는 근거로 해석한다.
+
+A2~A4는 모두 2026-06-03 Colab Tesla T4 GPU에서 `dry_run=false`로 완료되었고, 각 실험은 final global step 1574에서 best checkpoint를 저장했다. A2는 gradient clipping만 적용했을 때 best validation loss 6.7264를 기록해 A0_basic보다 0.0116 높았다. A3는 weight decay 0.01만 적용했을 때 best validation loss 6.7262를 기록해 A0_basic보다 0.0114 높았다. 두 실험 모두 baseline과 차이는 작지만 validation loss를 개선하지 못했으므로 최종 후보에서 제외한다.
+
+A4는 warmup + cosine decay, gradient clipping, weight decay를 함께 적용했지만 best validation loss 7.2467로 A0_basic보다 0.5319 높았다. 이는 A1과 유사하게 scheduler 조합의 영향이 크게 나타난 결과로 해석하며, 현재 Basic 기준 2 epoch 설정에서는 안정화 기법 조합보다 A0_basic의 constant learning rate 설정이 가장 좋은 validation loss를 보였다. 따라서 A 실험의 최종 선택은 A0_basic baseline 설정을 유지하는 것이다.
