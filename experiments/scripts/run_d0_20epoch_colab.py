@@ -34,7 +34,16 @@ def run(cmd: list[str | Path], cwd: Path | None = None) -> None:
     print("$", " ".join(map(str, cmd)), flush=True)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    subprocess.run(list(map(str, cmd)), cwd=cwd, check=True, env=env)
+    try:
+        subprocess.run(list(map(str, cmd)), cwd=cwd, check=True, env=env)
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"Command failed with exit code {exc.returncode}: "
+            + " ".join(map(str, cmd)),
+            file=sys.stderr,
+            flush=True,
+        )
+        raise
 
 
 def mount_drive() -> None:
@@ -84,9 +93,48 @@ def find_pretrain_run_dir() -> Path:
     return candidates[0]
 
 
+def check_cuda() -> None:
+    try:
+        import torch
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("PyTorch is not installed after requirements installation.") from exc
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA is required for the D0 20-epoch run, but torch.cuda.is_available() is False. "
+            "In Colab, choose Runtime > Change runtime type > T4 GPU (or another GPU), "
+            "then run the setup cell again."
+        )
+
+    print("cuda:", torch.cuda.get_device_name(0), flush=True)
+
+
+def print_pretrain_hint() -> None:
+    print("pretrain search root:", PRETRAIN_ROOT, flush=True)
+    if not PRETRAIN_ROOT.exists():
+        print(
+            "pretrain search root does not exist yet. "
+            "Set GPT_LAB_PRETRAIN_RUN_DIR if your A0_basic result is in another Drive folder.",
+            flush=True,
+        )
+        return
+
+    matches = sorted(PRETRAIN_ROOT.glob("A0_basic_*_JAEHWAN*"), reverse=True)[:5]
+    if matches:
+        print("recent A0_basic candidates:", flush=True)
+        for path in matches:
+            has_summary = (path / "summary.json").exists()
+            best_count = len(list((path / "checkpoints").glob("*_best.pt")))
+            print(f"- {path} (summary={has_summary}, best_checkpoints={best_count})", flush=True)
+    else:
+        print("no A0_basic_*_JAEHWAN* directories found under pretrain search root.", flush=True)
+
+
 def main() -> None:
     mount_drive()
     prepare_repo()
+    check_cuda()
+    print_pretrain_hint()
 
     pretrain_run_dir = find_pretrain_run_dir()
     run_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
