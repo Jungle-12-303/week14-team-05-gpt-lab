@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import random
 import subprocess
@@ -95,7 +96,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--install", action="store_true", help="Install requirements before running.")
     parser.add_argument("--skip-download", action="store_true", help="Do not run download_data.py.")
     parser.add_argument("--pretrain-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--pretrain-run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Local A/B/C pretrain run directory containing run_config.json, "
+            "summary.json, and checkpoints/. Missing model args are inferred from it."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cuda", "cpu"),
+        default="auto",
+        help="Training device. Use cuda for local GPU runs that should fail fast without CUDA.",
+    )
+    parser.add_argument("--require-cuda", action="store_true", help="Fail if CUDA is unavailable.")
+    parser.add_argument(
+        "--local-gpu",
+        action="store_true",
+        help="Use practical local GPU defaults: cuda device, TF32, pin_memory, and DataLoader workers.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -115,9 +137,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-limit", type=int, default=None)
     parser.add_argument("--freeze-blocks", type=int, default=1)
     parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--pin-memory", action="store_true", help="Pin DataLoader memory for CUDA transfer.")
+    parser.add_argument(
+        "--persistent-workers",
+        action="store_true",
+        help="Keep DataLoader workers alive between epochs when num_workers > 0.",
+    )
+    parser.add_argument("--prefetch-factor", type=int, default=None)
+    parser.add_argument("--enable-tf32", action="store_true", help="Enable TF32 matmul/cuDNN on CUDA.")
     parser.add_argument("--log-every-steps", type=int, default=20)
-    parser.add_argument("--eval-every-steps", type=int, default=100)
-    parser.add_argument("--save-every-steps", type=int, default=100)
+    parser.add_argument(
+        "--eval-every-steps",
+        type=int,
+        default=0,
+        help="Run full validation every N train steps. Use 0 to evaluate only at epoch end.",
+    )
+    parser.add_argument(
+        "--save-every-steps",
+        type=int,
+        default=0,
+        help="Save latest checkpoints every N train steps. Use 0 to keep only best checkpoints.",
+    )
     parser.add_argument("--keep-latest", type=int, default=2)
     parser.add_argument("--grad-clip-norm", type=float, default=None)
     return parser.parse_args()
@@ -137,8 +177,30 @@ def apply_quick_defaults(args: argparse.Namespace) -> None:
     args.n_heads = min(args.n_heads, 4)
     args.vocab_size = min(args.vocab_size, 300)
     args.log_every_steps = min(args.log_every_steps, 10)
-    args.eval_every_steps = min(args.eval_every_steps, 20)
-    args.save_every_steps = min(args.save_every_steps, 20)
+    if args.eval_every_steps > 0:
+        args.eval_every_steps = min(args.eval_every_steps, 20)
+    if args.save_every_steps > 0:
+        args.save_every_steps = min(args.save_every_steps, 20)
+
+
+def cli_has(flag: str) -> bool:
+    return flag in sys.argv[1:]
+
+
+def apply_local_gpu_defaults(args: argparse.Namespace) -> None:
+    if not args.local_gpu:
+        return
+    if args.device == "auto":
+        args.device = "cuda"
+    args.require_cuda = True
+    args.pin_memory = True
+    args.enable_tf32 = True
+    if args.num_workers == 0 and not cli_has("--num-workers"):
+        args.num_workers = min(4, max(1, (os.cpu_count() or 2) // 2))
+    if args.num_workers > 0 and not cli_has("--persistent-workers"):
+        args.persistent_workers = True
+    if args.num_workers > 0 and args.prefetch_factor is None:
+        args.prefetch_factor = 2
 
 
 def run_command(cmd: list[str], cwd: Path = ROOT, check: bool = True) -> subprocess.CompletedProcess:
@@ -225,6 +287,100 @@ def json_ready(value):
     if isinstance(value, list):
         return [json_ready(item) for item in value]
     return value
+
+
+def resolve_local_path(candidate: str | Path | None, *, run_dir: Path | None = None) -> Path | None:
+    if candidate is None:
+        return None
+
+    raw = Path(candidate)
+    if raw.exists():
+        return raw.resolve()
+
+    if run_dir is not None:
+        by_name = run_dir / "checkpoints" / raw.name
+        if by_name.exists():
+            return by_name.resolve()
+        relative = run_dir / raw
+        if relative.exists():
+            return relative.resolve()
+
+    text = str(candidate).replace("\\", "/")
+    if "/artifacts/tokenizers/" in text:
+        local = ROOT / "artifacts" / "tokenizers" / Path(text).name
+        if local.exists():
+            return local.resolve()
+    if "/checkpoints/" in text and run_dir is not None:
+        local = run_dir / "checkpoints" / Path(text).name
+        if local.exists():
+            return local.resolve()
+
+    if not raw.is_absolute():
+        local = ROOT / raw
+        if local.exists():
+            return local.resolve()
+
+    return raw
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def apply_pretrain_run_dir(args: argparse.Namespace) -> None:
+    if args.pretrain_run_dir is None:
+        return
+
+    run_dir = args.pretrain_run_dir.resolve()
+    if not run_dir.exists():
+        raise FileNotFoundError(f"pretrain run directory not found: {run_dir}")
+
+    run_config_path = run_dir / "run_config.json"
+    summary_path = run_dir / "summary.json"
+    run_config = read_json(run_config_path) if run_config_path.exists() else {}
+    summary = read_json(summary_path) if summary_path.exists() else {}
+
+    if args.pretrain_checkpoint is None:
+        checkpoint_value = summary.get("best_checkpoint_path")
+        if checkpoint_value is None:
+            checkpoints = sorted((run_dir / "checkpoints").glob("*_best.pt"))
+            if len(checkpoints) == 1:
+                args.pretrain_checkpoint = checkpoints[0]
+            elif not checkpoints:
+                raise FileNotFoundError(f"no *_best.pt checkpoint found under {run_dir / 'checkpoints'}")
+            else:
+                raise ValueError(
+                    f"multiple best checkpoints found under {run_dir / 'checkpoints'}; "
+                    "pass --pretrain-checkpoint explicitly."
+                )
+        else:
+            args.pretrain_checkpoint = resolve_local_path(checkpoint_value, run_dir=run_dir)
+    else:
+        args.pretrain_checkpoint = resolve_local_path(args.pretrain_checkpoint, run_dir=run_dir)
+
+    if args.pretrain_checkpoint is None or not args.pretrain_checkpoint.exists():
+        raise FileNotFoundError(f"pretrain checkpoint not found: {args.pretrain_checkpoint}")
+
+    model_config = run_config.get("model_config") or {}
+    if model_config:
+        option_map = {
+            "vocab_size": ("--vocab-size", int),
+            "context_length": ("--max-length", int),
+            "emb_dim": ("--emb-dim", int),
+            "n_heads": ("--n-heads", int),
+            "n_layers": ("--n-layers", int),
+            "drop_rate": ("--drop-rate", float),
+        }
+        for key, (flag, caster) in option_map.items():
+            if key in model_config and not cli_has(flag):
+                attr = "max_length" if key == "context_length" else key
+                setattr(args, attr, caster(model_config[key]))
+
+    if args.tokenizer_path is None:
+        tokenizer_value = run_config.get("tokenizer_path") or summary.get("tokenizer_path")
+        tokenizer_path = resolve_local_path(tokenizer_value, run_dir=run_dir)
+        if tokenizer_path is not None:
+            args.tokenizer_path = tokenizer_path
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -336,12 +492,42 @@ def make_loader(
         max_length=args.max_length,
         pad_id=tokenizer.get_pad_id(),
     )
-    return DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=shuffle,
-        num_workers=args.num_workers,
-    )
+    loader_kwargs = {
+        "batch_size": args.batch_size,
+        "shuffle": shuffle,
+        "num_workers": args.num_workers,
+        "pin_memory": args.pin_memory,
+    }
+    if args.num_workers > 0:
+        loader_kwargs["persistent_workers"] = args.persistent_workers
+        if args.prefetch_factor is not None:
+            loader_kwargs["prefetch_factor"] = args.prefetch_factor
+    return DataLoader(dataset, **loader_kwargs)
+
+
+def resolve_device(args: argparse.Namespace) -> torch.device:
+    cuda_available = torch.cuda.is_available()
+    if args.require_cuda and not cuda_available:
+        raise RuntimeError("CUDA is required for this run, but torch.cuda.is_available() is False.")
+    if args.device == "cuda":
+        if not cuda_available:
+            raise RuntimeError("requested --device cuda, but CUDA is unavailable.")
+        return torch.device("cuda")
+    if args.device == "cpu":
+        return torch.device("cpu")
+    return torch.device("cuda" if cuda_available else "cpu")
+
+
+def configure_torch_runtime(args: argparse.Namespace, device: torch.device) -> None:
+    if device.type != "cuda":
+        return
+    if args.enable_tf32:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
 
 
 def freeze_backbone_part(model: GPTForSequenceClassification, freeze_blocks: int) -> None:
@@ -686,6 +872,8 @@ def write_summary(
 def main() -> int:
     args = parse_args()
     apply_quick_defaults(args)
+    apply_local_gpu_defaults(args)
+    apply_pretrain_run_dir(args)
 
     output_dir = args.output_dir.resolve()
     checkpoint_dir = output_dir / "checkpoints"
@@ -703,9 +891,26 @@ def main() -> int:
         install_requirements()
 
     set_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device(args)
+    configure_torch_runtime(args, device)
     env = collect_env(device)
     print(json.dumps(env, ensure_ascii=False, indent=2))
+    if args.pretrain_run_dir is not None:
+        print("pretrain run dir:", args.pretrain_run_dir.resolve())
+    print("pretrain checkpoint:", args.pretrain_checkpoint or "none")
+    print("tokenizer path:", args.tokenizer_path or default_tokenizer_path(args))
+    print(
+        "local runtime:",
+        {
+            "device": str(device),
+            "local_gpu": args.local_gpu,
+            "pin_memory": args.pin_memory,
+            "num_workers": args.num_workers,
+            "persistent_workers": args.persistent_workers,
+            "prefetch_factor": args.prefetch_factor,
+            "enable_tf32": args.enable_tf32,
+        },
+    )
 
     write_run_config(args, output_dir, run_date, metrics_path)
     if args.dry_run:
