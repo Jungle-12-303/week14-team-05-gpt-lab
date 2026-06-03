@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620">
+  <rect width="1100" height="620" fill="#f8fafc"/>
+  <text x="64" y="58" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">YB_pred_combo epoch extension</text>
+  <text x="64" y="90" font-family="Arial, sans-serif" font-size="17" fill="#4b5563">vocab_size=2000, context_length=64, emb_dim=192, n_layers=4, batch_size=6, lr=7e-4, drop_rate=0.0</text>
+
+  <rect x="64" y="124" width="980" height="410" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+  <line x1="128" y1="474" x2="980" y2="474" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="128" y1="174" x2="128" y2="474" stroke="#9ca3af" stroke-width="1.5"/>
+
+  <g font-family="Arial, sans-serif" font-size="13" fill="#6b7280">
+    <text x="84" y="478">5.0</text>
+    <text x="84" y="407">6.0</text>
+    <text x="84" y="336">7.0</text>
+    <text x="84" y="264">8.0</text>
+    <text x="84" y="193">9.0</text>
+    <text x="512" y="512">num_epochs</text>
+    <text x="28" y="305" transform="rotate(-90 28 305)">final epoch val loss</text>
+  </g>
+
+  <g stroke="#e5e7eb" stroke-width="1">
+    <line x1="128" y1="402" x2="980" y2="402"/>
+    <line x1="128" y1="331" x2="980" y2="331"/>
+    <line x1="128" y1="260" x2="980" y2="260"/>
+    <line x1="128" y1="188" x2="980" y2="188"/>
+  </g>
+
+  <polyline points="181,457 245,454 309,444 373,429 437,411 501,387 565,360 629,332 693,301 757,272 821,242 885,212 949,184" fill="none" stroke="#ef4444" stroke-width="4"/>
+  <g fill="#ef4444">
+    <circle cx="181" cy="457" r="7"/>
+    <circle cx="245" cy="454" r="7"/>
+    <circle cx="309" cy="444" r="7"/>
+    <circle cx="373" cy="429" r="7"/>
+    <circle cx="437" cy="411" r="7"/>
+    <circle cx="501" cy="387" r="7"/>
+    <circle cx="565" cy="360" r="7"/>
+    <circle cx="629" cy="332" r="7"/>
+    <circle cx="693" cy="301" r="7"/>
+    <circle cx="757" cy="272" r="7"/>
+    <circle cx="821" cy="242" r="7"/>
+    <circle cx="885" cy="212" r="7"/>
+    <circle cx="949" cy="184" r="7"/>
+  </g>
+
+  <line x1="181" y1="459" x2="949" y2="459" stroke="#2563eb" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="196" y="448" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#2563eb">best val loss stays 5.2275 after epoch 3</text>
+
+  <g font-family="Arial, sans-serif" font-size="13" fill="#374151">
+    <text x="174" y="498">3</text>
+    <text x="238" y="498">4</text>
+    <text x="302" y="498">5</text>
+    <text x="366" y="498">6</text>
+    <text x="430" y="498">7</text>
+    <text x="494" y="498">8</text>
+    <text x="558" y="498">9</text>
+    <text x="622" y="498">10</text>
+    <text x="686" y="498">11</text>
+    <text x="750" y="498">12</text>
+    <text x="814" y="498">13</text>
+    <text x="878" y="498">14</text>
+    <text x="942" y="498">15</text>
+  </g>
+
+  <rect x="64" y="558" width="980" height="40" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="84" y="583" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#9a3412">Interpretation: epoch 3 is the best stopping point; longer training clearly overfits.</text>
+</svg>

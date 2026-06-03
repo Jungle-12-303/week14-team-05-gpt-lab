@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <rect width="1280" height="760" fill="#f8fafc"/>
+  <text x="64" y="58" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">One-variable screening summary</text>
+  <text x="64" y="90" font-family="Arial, sans-serif" font-size="17" fill="#4b5563">Lower validation loss is better. Each panel changes one parameter only inside its own screening group.</text>
+
+  <g transform="translate(64 130)">
+    <rect x="0" y="0" width="560" height="250" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="24" y="38" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Learning rate</text>
+    <text x="24" y="62" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">B2: val loss decreases as lr increases</text>
+    <line x1="64" y1="202" x2="500" y2="202" stroke="#9ca3af"/>
+    <line x1="64" y1="82" x2="64" y2="202" stroke="#9ca3af"/>
+    <polyline points="104,94 282,134 460,190" fill="none" stroke="#2563eb" stroke-width="4"/>
+    <circle cx="104" cy="94" r="7" fill="#2563eb"/>
+    <circle cx="282" cy="134" r="7" fill="#2563eb"/>
+    <circle cx="460" cy="190" r="7" fill="#2563eb"/>
+    <text x="84" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">1e-4</text>
+    <text x="262" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">3e-4</text>
+    <text x="440" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">5e-4</text>
+    <text x="126" y="92" font-family="Arial, sans-serif" font-size="15" fill="#111827">6.9270</text>
+    <text x="304" y="132" font-family="Arial, sans-serif" font-size="15" fill="#111827">6.4829</text>
+    <text x="388" y="180" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">5.8555</text>
+    <text x="24" y="230" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#2563eb">Signal: try lr=1e-3 on current best combo</text>
+  </g>
+
+  <g transform="translate(656 130)">
+    <rect x="0" y="0" width="560" height="250" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="24" y="38" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Dropout</text>
+    <text x="24" y="62" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">B3: lower dropout works better in this short run</text>
+    <line x1="64" y1="202" x2="500" y2="202" stroke="#9ca3af"/>
+    <line x1="64" y1="82" x2="64" y2="202" stroke="#9ca3af"/>
+    <polyline points="104,190 282,133 460,92" fill="none" stroke="#059669" stroke-width="4"/>
+    <circle cx="104" cy="190" r="7" fill="#059669"/>
+    <circle cx="282" cy="133" r="7" fill="#059669"/>
+    <circle cx="460" cy="92" r="7" fill="#059669"/>
+    <text x="94" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">0.0</text>
+    <text x="272" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">0.1</text>
+    <text x="450" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">0.2</text>
+    <text x="126" y="182" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">6.2700</text>
+    <text x="304" y="130" font-family="Arial, sans-serif" font-size="15" fill="#111827">6.4829</text>
+    <text x="382" y="90" font-family="Arial, sans-serif" font-size="15" fill="#111827">6.6366</text>
+    <text x="24" y="230" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#059669">Signal: keep drop_rate=0.0 first</text>
+  </g>
+
+  <g transform="translate(64 430)">
+    <rect x="0" y="0" width="560" height="250" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="24" y="38" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Number of layers</text>
+    <text x="24" y="62" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">C2: deeper model improves validation loss</text>
+    <line x1="64" y1="202" x2="500" y2="202" stroke="#9ca3af"/>
+    <line x1="64" y1="82" x2="64" y2="202" stroke="#9ca3af"/>
+    <polyline points="104,90 282,94 460,190" fill="none" stroke="#7c3aed" stroke-width="4"/>
+    <circle cx="104" cy="90" r="7" fill="#7c3aed"/>
+    <circle cx="282" cy="94" r="7" fill="#7c3aed"/>
+    <circle cx="460" cy="190" r="7" fill="#7c3aed"/>
+    <text x="98" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">1</text>
+    <text x="276" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">2</text>
+    <text x="454" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">4</text>
+    <text x="126" y="88" font-family="Arial, sans-serif" font-size="15" fill="#111827">7.2354</text>
+    <text x="304" y="94" font-family="Arial, sans-serif" font-size="15" fill="#111827">7.2248</text>
+    <text x="386" y="182" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">7.1540</text>
+    <text x="24" y="230" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#7c3aed">Signal: n_layers=4 is a reasonable candidate</text>
+  </g>
+
+  <g transform="translate(656 430)">
+    <rect x="0" y="0" width="560" height="250" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+    <text x="24" y="38" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Embedding dimension</text>
+    <text x="24" y="62" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">C3: larger embedding dimension gives the clearest gain</text>
+    <line x1="64" y1="202" x2="500" y2="202" stroke="#9ca3af"/>
+    <line x1="64" y1="82" x2="64" y2="202" stroke="#9ca3af"/>
+    <polyline points="104,88 282,110 460,190" fill="none" stroke="#dc2626" stroke-width="4"/>
+    <circle cx="104" cy="88" r="7" fill="#dc2626"/>
+    <circle cx="282" cy="110" r="7" fill="#dc2626"/>
+    <circle cx="460" cy="190" r="7" fill="#dc2626"/>
+    <text x="94" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">64</text>
+    <text x="270" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">128</text>
+    <text x="448" y="226" font-family="Arial, sans-serif" font-size="14" fill="#374151">192</text>
+    <text x="126" y="88" font-family="Arial, sans-serif" font-size="15" fill="#111827">7.2933</text>
+    <text x="304" y="110" font-family="Arial, sans-serif" font-size="15" fill="#111827">7.2248</text>
+    <text x="386" y="182" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">6.8935</text>
+    <text x="24" y="230" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#dc2626">Signal: emb_dim=192 is the strongest structure signal</text>
+  </g>
+</svg>
