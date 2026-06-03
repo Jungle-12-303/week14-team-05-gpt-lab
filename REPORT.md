@@ -277,7 +277,8 @@ D fine-tuning에서는 A0_basic best checkpoint를 입력으로 D0/D2/D3를 비�
 ## 10. 시각화 요약
 
 ### 10.1 A0_basic-D Batch Size와 Epoch 조정 비교
-<img width="1280" height="760" alt="image" src="https://github.com/user-attachments/assets/ba25a55d-1a14-4fb1-ab57-9679bf2165a5" /> <img width="1280" height="760" alt="image" src="https://github.com/user-attachments/assets/e7fc96a4-04b3-47b9-9939-153a4157bb01" />
+<img src="https://github.com/user-attachments/assets/ba25a55d-1a14-4fb1-ab57-9679bf2165a5" width="49%" alt="image" />
+<img src="https://github.com/user-attachments/assets/1719ee07-bff7-4aef-bdb1-ba346ad46b26" width="49%" alt="image" />
 
 
 
