@@ -62,7 +62,7 @@ num_epochs=3
 ## 4. 결과 요약
 
 | 실험 ID | vocab_size | tokenizer | best val loss | final global step | elapsed_min | 상태 | best checkpoint |
-| --- | ---: | --- | ---: | ---: | ---: | --- |
+| --- | ---: | --- | ---: | ---: | ---: | --- | --- |
 | `YB_pred_combo` | 2000 | 기존 tokenizer 사용 | 5.2275 | 2559 | 4.32 | keep | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/YB_pred_combo_20260603_YEONGBEEN/checkpoints/YB_pred_combo_20260603_step2500_best.pt` |
 | `YB_pred_combo_3000` | 3000 | 기존 tokenizer 사용 | 5.7709 | 2286 | 5.75 | keep | `/content/drive/MyDrive/gpt-lab/experiment_outputs/pretrain/YB_pred_combo_3000_20260603_YEONGBEEN/checkpoints/YB_pred_combo_3000_20260603_step2286_best.pt` |
 
@@ -88,7 +88,9 @@ num_epochs=3
 
 시각화:
 
-![YB predicted combo epoch sweep](/Users/choeyeongbin/week14-team-05-gpt-lab/docs/yb/yb_predicted_combo_epoch_sweep.svg)
+![YB predicted combo epoch sweep](./yb_predicted_combo_epoch_sweep.svg)
+
+위 그래프는 `vocab_size=2000` 조합을 `epoch=1~15`까지 확장했을 때의 train loss, validation loss, best validation loss 누적 추이를 함께 보여준다. 최저점은 `epoch=3`, `best val loss=5.2275`다.
 
 ## 5. 세부 기록
 
@@ -160,13 +162,13 @@ epoch별 요약:
 
 #### 대표 기록
 
-| 실험 ID | num_epochs | best val loss | final epoch val loss | final global step | elapsed_min | best checkpoint |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `YB_pred_combo_e4` | 4 | 5.2275 | 5.2863 | 3412 | 4.91 | step2500 best 유지 |
-| `YB_pred_combo_e5` | 5 | 5.2275 | 5.4237 | 4265 | 4.90 | step2500 best 유지 |
-| `YB_pred_combo_e6` | 6 | 5.2275 | 5.6372 | 5118 | 확인됨 | step2500 best 유지 |
-| `YB_pred_combo_e10` | 10 | 5.2275 | 6.9841 | 확인됨 | 확인됨 | step2500 best 유지 |
-| `YB_pred_combo_e15` | 15 | 5.2275 | 9.0314 | 확인됨 | 확인됨 | step2500 best 유지 |
+| 실험 ID | num_epochs | best val loss | final epoch val loss | final global step | 비고 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `YB_pred_combo_e4` | 4 | 5.2275 | 5.2863 | 3412 | `step2500` best 유지, 개선 없음 |
+| `YB_pred_combo_e5` | 5 | 5.2275 | 5.4237 | 4265 | `step2500` best 유지, 과적합 시작 |
+| `YB_pred_combo_e6` | 6 | 5.2275 | 5.6372 | 5118 | `step2500` best 유지, 악화 지속 |
+| `YB_pred_combo_e10` | 10 | 5.2275 | 6.9841 | 8530 | `step2500` best 유지, 과적합 심화 |
+| `YB_pred_combo_e15` | 15 | 5.2275 | 9.0314 | 12795 | `step2500` best 유지, 장기 학습 비효율 명확 |
 
 주요 epoch 종료 val loss:
 
@@ -195,7 +197,7 @@ epoch별 요약:
 - `2000`은 `3000`보다 학습 시간도 짧았고(`4.32`분 vs `5.75`분), final global step은 더 많았다(`2559` vs `2286`).
 - `2000` 조합을 `epoch=4~15`로 연장했을 때 best val loss는 한 번도 더 낮아지지 않았고, epoch 종료 val loss는 꾸준히 악화됐다.
 
-즉 이번 결과는 두 가지를 동시에 보여준다.
+즉 이번 결과는 다음 세 가지를 동시에 보여준다.
 
 - 예측 조합 자체는 유효하다.
 - 같은 조합에서는 현재 `vocab_size=2000`이 성능과 시간 모두 더 유리하다.
