@@ -86,6 +86,10 @@ num_epochs=3
 | 14 | 5.2275 | 8.6316 | 과적합 심화 |
 | 15 | 5.2275 | 9.0314 | 과적합 심화 |
 
+시각화:
+
+![YB predicted combo epoch sweep](/Users/choeyeongbin/week14-team-05-gpt-lab/docs/yb/yb_predicted_combo_epoch_sweep.svg)
+
 ## 5. 세부 기록
 
 ### 5.1 `vocab_size=2000`
