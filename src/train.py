@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F  # GPTModel에서 F.cross_entropy를 가져옴
+from tqdm.auto import tqdm
 
 # 패키지로 import될 때와 파일 단독 실행 때 모두 GPTModel을 찾기 위한 import 처리.
 try:
@@ -333,7 +334,13 @@ def train_model(
     model.to(device)
 
     # start_epoch부터 전체 목표 epoch 전까지 학습 반복.
-    for epoch in range(start_epoch, num_epochs):
+    epoch_iter = tqdm(
+        range(start_epoch, num_epochs),
+        desc=f"{experiment_id} epochs",
+        unit="epoch",
+        dynamic_ncols=True,
+    )
+    for epoch in epoch_iter:
         # 학습 단계에서는 dropout 등 학습용 동작을 켠 상태로 설정.
         model.train()
 
@@ -341,8 +348,16 @@ def train_model(
         epoch_loss = 0.0
         batches_seen = 0
 
+        progress_bar = tqdm(
+            train_loader,
+            desc=f"{experiment_id} epoch {epoch + 1}/{num_epochs}",
+            unit="batch",
+            dynamic_ncols=True,
+            leave=False,
+        )
+
         # train_loader에서 input/target 배치를 하나씩 꺼내 학습.
-        for input_batch, target_batch in train_loader:
+        for input_batch, target_batch in progress_bar:
             # 이전 배치에서 누적된 gradient 초기화.
             optimizer.zero_grad()
 
@@ -361,6 +376,11 @@ def train_model(
             epoch_loss += loss.item()
             batches_seen += 1
             global_step += 1
+            progress_bar.set_postfix(
+                step=global_step,
+                loss=f"{loss.item():.4f}",
+                lr=f"{_current_lr(optimizer):.2e}",
+            )
 
             if log_every_steps is not None and log_every_steps > 0 and global_step % log_every_steps == 0:
                 record = {
@@ -375,6 +395,10 @@ def train_model(
                 _append_metric_jsonl(metrics_path, record)
                 if metrics_callback is not None:
                     metrics_callback(record)
+                tqdm.write(
+                    f"step {global_step}: train loss {loss.item():.4f}, "
+                    f"lr {_current_lr(optimizer):.2e}"
+                )
 
             # eval_freq마다 train/validation loss를 일부 배치 기준으로 점검.
             if eval_freq > 0 and global_step % eval_freq == 0:
@@ -418,7 +442,7 @@ def train_model(
                 _append_metric_jsonl(metrics_path, record)
                 if metrics_callback is not None:
                     metrics_callback(record)
-                print(
+                tqdm.write(
                     f"step {global_step}: train loss {train_loss:.4f}, "
                     f"val loss {val_loss:.4f}"
                 )
@@ -509,7 +533,12 @@ def train_model(
                 path=str(ckpt_dir / f"checkpoint_epoch_{completed_epoch}.pt"),
             )
 
-        print(
+        epoch_iter.set_postfix(
+            train=f"{avg_epoch_loss:.4f}",
+            val=f"{val_loss:.4f}",
+            best=f"{best_val_loss:.4f}",
+        )
+        tqdm.write(
             f"epoch {completed_epoch}: train loss {avg_epoch_loss:.4f}, "
             f"val loss {val_loss:.4f}, best val loss {best_val_loss:.4f}"
         )
