@@ -1,0 +1,4 @@
+[style]
+based_on_style = google
+column_limit = 140
+spaces_before_comment = 2
