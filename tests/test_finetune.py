@@ -121,3 +121,60 @@ class TestSentimentTrainEval:
 
         assert callable(train_epoch_sentiment)
         assert callable(evaluate_sentiment)
+
+    def test_train_sentiment_model_writes_step_artifacts(self, tmp_path):
+        """감성 분류 학습 loop가 metric JSONL과 latest/best checkpoint를 남기는지 확인한다."""
+        from torch.utils.data import DataLoader
+        from model import GPTModel
+        from finetune import (
+            GPTForSequenceClassification,
+            ReviewSentimentDataset,
+            train_sentiment_model,
+        )
+
+        rows = [
+            {"text": "좋다", "label": 1},
+            {"text": "별로", "label": 0},
+            {"text": "재미", "label": 1},
+            {"text": "싫다", "label": 0},
+        ]
+        tokenizer = DummyTokenizer()
+        train_loader = DataLoader(
+            ReviewSentimentDataset(rows, tokenizer, max_length=8),
+            batch_size=2,
+            shuffle=False,
+        )
+        val_loader = DataLoader(
+            ReviewSentimentDataset(rows[:2], tokenizer, max_length=8),
+            batch_size=2,
+            shuffle=False,
+        )
+        backbone = GPTModel(GPT_CONFIG_TINY)
+        model = GPTForSequenceClassification(backbone, num_labels=2)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        metrics_path = tmp_path / "metrics" / "D_metrics.jsonl"
+        ckpt_dir = tmp_path / "checkpoints"
+
+        summary = train_sentiment_model(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            device=torch.device("cpu"),
+            num_epochs=1,
+            experiment_id="D0",
+            run_date="20260602",
+            ckpt_dir=ckpt_dir,
+            metrics_path=metrics_path,
+            log_every_steps=1,
+            eval_every_steps=1,
+            save_every_steps=1,
+            keep_latest=1,
+        )
+
+        assert metrics_path.exists()
+        lines = metrics_path.read_text(encoding="utf-8").splitlines()
+        assert any('"event": "eval"' in line for line in lines)
+        assert any('"event": "checkpoint"' in line for line in lines)
+        assert Path(summary["best_checkpoint_path"]).exists()
+        assert len(list(ckpt_dir.glob("*_latest.pt"))) == 1
