@@ -47,11 +47,22 @@ def run(cmd: list[str | Path], cwd: Path | None = None) -> None:
 
 
 def mount_drive() -> None:
+    if (Path("/content/drive/MyDrive")).exists():
+        print("Google Drive already mounted: /content/drive/MyDrive", flush=True)
+        return
+
     try:
         from google.colab import drive  # type: ignore
     except ModuleNotFoundError as exc:
         raise RuntimeError("This helper is intended for Google Colab.") from exc
-    drive.mount("/content/drive")
+
+    try:
+        drive.mount("/content/drive")
+    except AttributeError as exc:
+        raise RuntimeError(
+            "Google Drive must be mounted from a notebook cell before running this script with !python. "
+            "Run this first: from google.colab import drive; drive.mount('/content/drive')"
+        ) from exc
 
 
 def prepare_repo() -> None:
